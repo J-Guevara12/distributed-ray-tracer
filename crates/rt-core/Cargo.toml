@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-fastrand = "2"
-glam = "0.29"
+fastrand = "2.4.1"
+glam = "0.33"
 
 [dev-dependencies]
 axum-test = "20.1.0"

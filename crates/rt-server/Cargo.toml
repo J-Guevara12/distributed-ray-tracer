@@ -1,0 +1,19 @@
+[package]
+name = "rt-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.7"
+base64 = "0.22"
+image = "0.25"
+rt-renderer = { version = "0.1.0", path = "../rt-renderer" }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+axum-test = "20.1.0"
+criterion = "0.8.2"
+insta = "1.47.2"
+proptest = "1.11.0"
+tokio-test = "0.4.5"

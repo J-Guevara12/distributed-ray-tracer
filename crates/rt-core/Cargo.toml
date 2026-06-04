@@ -1,0 +1,15 @@
+[package]
+name = "rt-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fastrand = "2"
+glam = "0.29"
+
+[dev-dependencies]
+axum-test = "20.1.0"
+criterion = "0.8.2"
+insta = "1.47.2"
+proptest = "1.11.0"
+tokio-test = "0.4.5"

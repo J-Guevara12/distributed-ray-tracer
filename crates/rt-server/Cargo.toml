@@ -4,10 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-stream = "0.3.6"
 axum = "0.8.9"
 base64 = "0.22"
+futures-util = "0.3.32"
 image = "0.25"
 rt-renderer = { version = "0.1.0", path = "../rt-renderer" }
+serde_json = "1.0.150"
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"

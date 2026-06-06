@@ -1,6 +1,10 @@
 use axum::{routing::get, Router};
 use std::net::SocketAddr;
 
+use crate::state::AppState;
+mod state;
+mod handlers;
+
 async fn health_handler() -> &'static str {
     "hello ray tracer"
 }

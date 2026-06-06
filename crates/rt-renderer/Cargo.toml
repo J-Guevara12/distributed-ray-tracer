@@ -12,7 +12,7 @@ rayon = "1.10"
 rt-core = { version = "0.1.0", path = "../rt-core" }
 rt-scene = { version = "0.1.0", path = "../rt-scene" }
 serde_json = "1.0.150"
-serde = "1.0.228"
+serde = {version = "1.0.228", features = ["derive"]}
 tokio = "1.52.3"
 
 [dev-dependencies]

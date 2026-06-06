@@ -47,5 +47,4 @@ pub fn render_scene<T: RayTracer> (
 
         let _ = tx_stream.send(result);
     }
-
 }

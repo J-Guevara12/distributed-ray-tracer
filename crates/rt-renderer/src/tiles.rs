@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct Tile {
     pub id: usize,
     pub x: u32,
@@ -7,7 +9,7 @@ pub struct Tile {
     pub height: u32,
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, Serialize)]
 pub struct TileResult {
     pub tile_id: usize,
     pub pixels: Vec<u8>,

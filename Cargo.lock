@@ -2209,10 +2209,12 @@ dependencies = [
  "image",
  "insta",
  "proptest",
+ "rt-core",
  "rt-renderer",
  "serde_json",
  "tokio",
  "tokio-test",
+ "tower-http",
  "tracing",
  "tracing-subscriber",
 ]

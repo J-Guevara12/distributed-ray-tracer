@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Ray Tracer Distribuido - Fase 1B</title>
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        h1 { margin-bottom: 5px; font-size: 1.5rem; color: #00ffcc; }
+        #status { margin-bottom: 20px; color: #888; font-size: 0.9rem; }
+        canvas {
+            border: 2px solid #333;
+            background-color: #000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>RT-CORE // LIVE RENDER STREAM</h1>
+    <div id="status">Esperando conexión con http://127.0.1.1:3000...</div>
+
+    <canvas id="renderCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('renderCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusDiv = document.getElementById('status');
+
+        // 1. Nos conectamos al endpoint SSE de tu servidor Axum en Rust
+        const eventSource = new EventSource('http://127.0.1.1:3000/render/stream');
+
+        eventSource.onopen = () => {
+            statusDiv.innerText = "CONECTADO // Renderizando escena...";
+            statusDiv.style.color = "#00ff00";
+        };
+
+        // 2. Escuchamos los bloques de píxeles (Tiles) normales
+        eventSource.onmessage = (event) => {
+            const tileResult = JSON.parse(event.data);
+            const tile = tileResult.original_tile;
+            const pixels = tileResult.pixels;
+
+            // Si es el tile especial de inicialización (Snapshot completo), configuramos el tamaño del canvas
+            if (tile.id === 999999 || (canvas.width === 0 && canvas.height === 0)) {
+                if (canvas.width !== tile.width || canvas.height !== tile.height) {
+                    canvas.width = tile.width;
+                    canvas.height = tile.height;
+                }
+            }
+
+            // Creamos un buffer de píxeles compatible con el Canvas de HTML5 (RGBA)
+            const imageData = ctx.createImageData(tile.width, tile.height);
+            let srcIdx = 0;
+            let dstIdx = 0;
+
+            // Mapeamos los bytes RGB que mandó tu render_scene a RGBA (el canvas exige canal Alpha)
+            for (let i = 0; i < tile.width * tile.height; i++) {
+                imageData.data[dstIdx]     = pixels[srcIdx];     // R
+                imageData.data[dstIdx + 1] = pixels[srcIdx + 1]; // G
+                imageData.data[dstIdx + 2] = pixels[srcIdx + 2]; // B
+                imageData.data[dstIdx + 3] = 255;                // A (Opaco)
+                
+                srcIdx += 3;
+                dstIdx += 4;
+            }
+
+            // Pintamos el bloque en sus coordenadas globales correspondientes
+            ctx.putImageData(imageData, tile.x, tile.y);
+        };
+
+        // 3. Escuchamos tu evento personalizado "done" que corta la conexión
+        eventSource.addEventListener('done', (event) => {
+            statusDiv.innerText = "COMPLETADO // Conexión cerrada limpiamente.";
+            statusDiv.style.color = "#00ffcc";
+            eventSource.close(); // Cerramos el socket del lado del cliente
+        });
+
+        eventSource.onerror = (err) => {
+            if (eventSource.readyState === EventSource.CLOSED) {
+                // Si se cerró porque terminó, no es un error real
+                return;
+            }
+            statusDiv.innerText = "ERROR // Pérdida de conexión con el servidor.";
+            statusDiv.style.color = "#ff3333";
+        };
+    </script>
+</body>
+</html>

@@ -1,17 +1,91 @@
 use axum::{routing::get, Router};
-use std::net::SocketAddr;
+use rt_core::{Point3, RayTracer};
+use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene};
+use tokio::sync::broadcast;
+use tower_http::cors::{CorsLayer, Any};
+use std::{net::SocketAddr, sync::{Arc, atomic::AtomicBool}};
 
 use crate::state::AppState;
 mod state;
 mod handlers;
 
-async fn health_handler() -> &'static str {
-    "hello ray tracer"
+struct GradientTracer;
+
+impl RayTracer for GradientTracer {
+    fn trace_ray(&self, ray: rt_core::Ray) -> [u8; 3] {
+        let unit_direction = ray.direction;
+
+        let t = 0.5 * (unit_direction.y + 1.0);
+
+        let r = (1.0 - t) * 1.0 + t * 0.5;
+        let g = (1.0 - t) * 1.0 + t * 0.7;
+        let b = (1.0 - t) * 1.0 + t * 1.0;
+
+        [
+            (r * 255.99) as u8,
+            (g * 255.99) as u8,
+            (b * 255.99) as u8,
+        ]
+    }
 }
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/health", get(health_handler));
+    let aspect_ratio = 16.0 / 9.0;
+    let image_width = 1920;
+    let stride = 3;
+    let tile_size = 32;
+
+    let camera_config = CameraConfig{
+        aspect_ratio,
+        image_width,
+        fov: 90.0,
+        look_from: Point3::new(0.0, 0.0, 0.0),
+        look_at: Point3::new(0.0, 0.0, -1.0),
+        vup: Point3::new(0.0, 1.0, 0.0),
+        samples_per_pixel: 10,
+    };
+    
+    let camera = Arc::new(Camera::new(camera_config));
+
+    let width = camera.width;
+    let height = camera.height;
+
+    println!("Iniciando rt-server...");
+    println!("Resolución de renderizado: {}x{} (Tile Size: {})", width, height, tile_size);
+
+    let framebuffer = Arc::new(FrameBuffer::new(width, height, stride));
+    let (tx_stream, _) = broadcast::channel(100);
+
+    let state = AppState {
+        framebuffer: Arc::clone(&framebuffer),
+        tx_stream: tx_stream.clone(),
+        is_finished: Arc::new(AtomicBool::new(false)),
+    };
+
+    let camera_worker = Arc::clone(&camera);
+    let fb_worker = Arc::clone(&framebuffer);
+    let tx_worker = tx_stream.clone();
+    let is_finished_worker = state.is_finished.clone();
+
+    let tracer = Arc::new(GradientTracer);
+
+    tokio::task::spawn_blocking(move || {
+        println!("¡Motor de renderizado incializado!");
+        render_scene(camera_worker, tracer, fb_worker, tx_worker, tile_size, stride);
+        is_finished_worker.store(true, std::sync::atomic::Ordering::SeqCst);
+        println!("¡Renderizado completado!");
+    });
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any);
+
+    let app = Router::new()
+        .route("/health", get(handlers::health_handler))
+        .route("/render/stream", get(handlers::render_stream_handler))
+        .with_state(state)
+        .layer(cors);
 
     let addr = SocketAddr::from(([127, 0, 1, 1], 3000));
     println!("Servidor de pruebas corriendo en http://{}", addr);

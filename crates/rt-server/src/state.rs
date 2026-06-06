@@ -5,5 +5,6 @@ use tokio::sync::broadcast;
 #[derive(Clone)]
 pub struct AppState {
     pub framebuffer: Arc<FrameBuffer>,
-    pub tx_stream: broadcast::Sender<rt_renderer::tiles::TileResult>
+    pub tx_stream: broadcast::Sender<rt_renderer::tiles::TileResult>,
+    pub is_finished: Arc<std::sync::atomic::AtomicBool>,
 }

@@ -1,4 +1,6 @@
 use std::sync::Arc;
+use tracing::{span, Level};
+use rayon::prelude::*;
 
 use rt_core::RayTracer;
 use tokio::sync::broadcast;
@@ -14,7 +16,15 @@ pub fn render_scene<T: RayTracer> (
     stride: usize
 ){
     let generator = TileGenerator::new(camera.width, camera.height, tile_size);
-    for tile in generator {
+
+    let render_span = span!(Level::INFO, "scene_render_total", width=camera.width, height = camera.height);
+    let _enter = render_span.enter();
+
+    let tiles: Vec<_> = generator.collect();
+
+    tiles.par_iter().for_each(|tile| {
+        let tile_span = span!(Level::DEBUG, "render_tile", tile_id = tile.id);
+        let _tile_enter = tile_span.enter();
         let mut pixels: Vec<u8> = Vec::with_capacity((tile.width * tile.height) as usize * stride);
 
         for local_y in 0..tile.height {
@@ -41,10 +51,10 @@ pub fn render_scene<T: RayTracer> (
                 pixels.push((b/camera.samples_per_pixel as f32) as u8);
             }
         }
-        let result = TileResult { tile_id: tile.id, pixels, original_tile: tile };
+        let result = TileResult { tile_id: tile.id, pixels, original_tile: *tile };
 
         framebuffer.write_tile(&result, stride);
 
         let _ = tx_stream.send(result);
-    }
+    })
 }

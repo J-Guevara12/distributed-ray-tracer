@@ -1,2 +1,2 @@
-mod test;
+mod test_handlers;
 mod test_stream;

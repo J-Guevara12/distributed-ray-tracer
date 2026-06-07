@@ -3,7 +3,8 @@ use rt_core::{Point3, RayTracer};
 use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene};
 use tokio::sync::broadcast;
 use tower_http::cors::{CorsLayer, Any};
-use std::{net::SocketAddr, sync::{Arc, atomic::AtomicBool}};
+use std::{net::SocketAddr, sync::{Arc, atomic::AtomicBool}, time::Instant};
+use tracing_subscriber::fmt::format::FmtSpan;
 
 use crate::state::AppState;
 mod state;
@@ -31,6 +32,14 @@ impl RayTracer for GradientTracer {
 
 #[tokio::main]
 async fn main() {
+    let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
+
+
+    tracing_subscriber::fmt()
+        .with_writer(non_blocking)
+        .with_max_level(tracing::Level::ERROR)
+        .with_span_events(FmtSpan::CLOSE)
+        .init();
     let aspect_ratio = 16.0 / 9.0;
     let image_width = 1920;
     let stride = 3;
@@ -72,9 +81,10 @@ async fn main() {
 
     tokio::task::spawn_blocking(move || {
         println!("¡Motor de renderizado incializado!");
+        let instant = Instant::now(); 
         render_scene(camera_worker, tracer, fb_worker, tx_worker, tile_size, stride);
         is_finished_worker.store(true, std::sync::atomic::Ordering::SeqCst);
-        println!("¡Renderizado completado!");
+        println!("¡Renderizado completado! {} ms", instant.elapsed().as_millis());
     });
 
     let cors = CorsLayer::new()

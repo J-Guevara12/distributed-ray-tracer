@@ -3,6 +3,7 @@ use axum_test::TestServer;
 use rt_renderer::framebuffer::FrameBuffer;
 use tokio::sync::broadcast;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use crate::state::AppState;
 use crate::handlers::render_stream_handler;
 
@@ -15,6 +16,7 @@ async fn test_sse_render_stream_headers() {
     let state = AppState {
         framebuffer: fb,
         tx_stream: tx,
+        is_finished: Arc::new(AtomicBool::new(false))
     };
 
     // 2. Construir router de pruebas acoplado al handler SSE

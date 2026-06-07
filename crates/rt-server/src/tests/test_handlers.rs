@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{handlers::health_handler, *};
 use axum_test::TestServer;
 
 #[tokio::test]

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use rt_core::{Point3, Vec3, Ray, RayTracer};
+use rt_core::{Color, Point3, Ray, RayTracer, Vec3};
 use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
 use crate::render::render_scene;
@@ -8,11 +8,11 @@ use crate::render::render_scene;
 /// 1. Creamos un "Mock" del RayTracer para las pruebas unitarias.
 /// Su único trabajo es devolver un color fijo y conocido sin hacer cálculos complejos.
 struct MockRayTracer {
-    fixed_color: [u8; 3],
+    fixed_color: Color,
 }
 
 impl RayTracer for MockRayTracer {
-    fn trace_ray(&self, _ray: Ray) -> [u8; 3] {
+    fn trace_ray(&self, _ray: Ray) -> Color {
         // No importa la dirección del rayo, siempre devolvemos el mismo color
         self.fixed_color
     }
@@ -40,7 +40,7 @@ fn test_render_scene_integration() {
     let camera = Arc::new(Camera::new(camera_config));
 
     // Instanciamos nuestro tracer simulado para que pinte todo de VERDE PURO
-    let tracer = Arc::new(MockRayTracer { fixed_color: [0, 255, 0] });
+    let tracer = Arc::new(MockRayTracer { fixed_color: Color::new(0.0, 1.0, 0.0) });
     
     // Instanciamos el FrameBuffer y el canal de comunicación
     let framebuffer = Arc::new(FrameBuffer::new(width, height, stride));

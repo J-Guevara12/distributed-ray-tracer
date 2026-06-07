@@ -1,23 +1,19 @@
-use std::sync::Arc;
+use rt_core::{Color, Interval, Ray};
+use rt_scene::{Hittable};
 
-use rt_core::{Color, Interval, RayTracer};
-use rt_scene::{Hittable, hittable_list::HittableList};
 
-pub struct NormalTracer {
-    pub world: Arc<HittableList>,
+pub trait RayTracer: Send + Sync + 'static {
+    fn trace_ray(&self, ray: Ray, world: &dyn Hittable) -> Color;
 }
 
-impl NormalTracer {
-    pub fn new(world: Arc<HittableList>) -> Self {
-        Self { world }
-    }
+pub struct NormalTracer {
 }
 
 impl RayTracer for NormalTracer {
-    fn trace_ray(&self, ray: rt_core::Ray) -> Color {
+    fn trace_ray(&self, ray: Ray,  world: &dyn Hittable) -> Color {
         let interval = Interval::new(0.0, f32::INFINITY);
 
-        if let Some(rec) = self.world.hit(&ray, interval) {
+        if let Some(rec) = world.hit(&ray, interval) {
             // Las mapeamos linealmente a [0.0, 1.0] para convertirlas en color.
             let r = 0.5 * (rec.normal.x + 1.0);
             let g = 0.5 * (rec.normal.y + 1.0);
@@ -36,4 +32,6 @@ impl RayTracer for NormalTracer {
         Color::new( r, g, b )
     }
 }
+
+
 

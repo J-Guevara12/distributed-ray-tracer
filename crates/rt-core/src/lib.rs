@@ -4,11 +4,6 @@ pub type Vec3 = Vec3A;
 pub type Color = Vec3A;
 pub type Point3 = Vec3A;
 
-
-pub trait RayTracer: Send + Sync + 'static {
-    fn trace_ray(&self, ray: Ray) -> Color;
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct Ray {
     pub origin: Point3,

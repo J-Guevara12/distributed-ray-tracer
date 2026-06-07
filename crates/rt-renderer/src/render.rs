@@ -1,11 +1,12 @@
 use std::sync::Arc;
+use rt_scene::Hittable;
 use tracing::{span, Level};
 use rayon::prelude::*;
 
-use rt_core::{Color, RayTracer};
+use rt_core::{Color};
 use tokio::sync::broadcast;
 
-use crate::{camera::Camera, framebuffer::FrameBuffer, tiles::{TileGenerator, TileResult}};
+use crate::{camera::Camera, framebuffer::FrameBuffer, tiles::{TileGenerator, TileResult}, tracers::RayTracer};
 
 pub fn render_scene<T: RayTracer> (
     camera: Arc<Camera>,
@@ -13,7 +14,8 @@ pub fn render_scene<T: RayTracer> (
     framebuffer: Arc<FrameBuffer>,
     tx_stream: broadcast::Sender<TileResult>,
     tile_size: u32,
-    stride: usize
+    stride: usize,
+    world: &dyn Hittable
 ){
     let generator = TileGenerator::new(camera.width, camera.height, tile_size);
     let samples_float = camera.samples_per_pixel as f32;
@@ -38,7 +40,7 @@ pub fn render_scene<T: RayTracer> (
                 for sample in 0..camera.samples_per_pixel {
                     let ray = camera.get_ray(x, y, sample);
 
-                    let color = tracer.trace_ray(ray);
+                    let color = tracer.trace_ray(ray, world);
 
                     color_accumulator += color;
                 }

@@ -1,9 +1,12 @@
 use std::sync::Arc;
+use rt_scene::Hittable;
+use rt_scene::hittable_list::HittableList;
 use tokio::sync::broadcast;
-use rt_core::{Color, Point3, Ray, RayTracer, Vec3};
+use rt_core::{Color, Point3, Ray, Vec3};
 use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
 use crate::render::render_scene;
+use crate::tracers::RayTracer;
 
 /// 1. Creamos un "Mock" del RayTracer para las pruebas unitarias.
 /// Su único trabajo es devolver un color fijo y conocido sin hacer cálculos complejos.
@@ -12,7 +15,7 @@ struct MockRayTracer {
 }
 
 impl RayTracer for MockRayTracer {
-    fn trace_ray(&self, _ray: Ray) -> Color {
+    fn trace_ray(&self, _ray: Ray, _world: & dyn Hittable) -> Color {
         // No importa la dirección del rayo, siempre devolvemos el mismo color
         self.fixed_color
     }
@@ -45,6 +48,7 @@ fn test_render_scene_integration() {
     // Instanciamos el FrameBuffer y el canal de comunicación
     let framebuffer = Arc::new(FrameBuffer::new(width, height, stride));
     let (tx_stream, mut rx_stream) = broadcast::channel(10);
+    let world = Arc::new(HittableList::new());
 
     // 3. EJECUCIÓN: Corremos el orquestador de la escena
     render_scene(
@@ -54,6 +58,7 @@ fn test_render_scene_integration() {
         tx_stream,
         tile_size,
         stride,
+        world.as_ref()
     );
 
     // 4. ASERCIÓN 1: Validar el canal de comunicación (Broadcast)

@@ -1,7 +1,7 @@
 use axum::{routing::get, Router};
-use rt_core::{Point3};
+use rt_core::{Point3, Vec3};
 use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tracers::NormalTracer};
-use rt_scene::{geometry::Sphere, hittable_list::HittableList};
+use rt_scene::{geometry::Sphere, hittable_list::HittableList, materials::Lambertian};
 use tokio::sync::broadcast;
 use tower_http::cors::{CorsLayer, Any};
 use std::{net::SocketAddr, sync::{Arc, atomic::AtomicBool}, time::Instant};
@@ -40,9 +40,11 @@ async fn main() {
     let width = camera.width;
     let height = camera.height;
 
+    let material = Arc::new(Lambertian::new(Vec3::new(0.0, 5.0, 0.0)));
+
     let mut world = HittableList::new();
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, material.clone())));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, material)));
 
 
     println!("Iniciando rt-server...");
@@ -62,12 +64,12 @@ async fn main() {
     let tx_worker = tx_stream.clone();
     let is_finished_worker = state.is_finished.clone();
 
-    let tracer = Arc::new(NormalTracer::new(Arc::new(world)));
+    let tracer = Arc::new(NormalTracer{});
 
     tokio::task::spawn_blocking(move || {
         println!("¡Motor de renderizado incializado!");
         let instant = Instant::now(); 
-        render_scene(camera_worker, tracer, fb_worker, tx_worker, tile_size, stride);
+        render_scene(camera_worker, tracer, fb_worker, tx_worker, tile_size, stride, &world);
         is_finished_worker.store(true, std::sync::atomic::Ordering::SeqCst);
         println!("¡Renderizado completado! {} ms", instant.elapsed().as_millis());
     });

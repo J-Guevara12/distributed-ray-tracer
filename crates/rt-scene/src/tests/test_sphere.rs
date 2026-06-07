@@ -1,5 +1,5 @@
 use rt_core::{Point3, Vec3};
-use crate::*;
+use crate::{geometry::Sphere, *};
 
 #[test]
 fn test_sphere_hit_direct() {

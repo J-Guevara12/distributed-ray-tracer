@@ -1,15 +1,16 @@
 use std::sync::Arc;
 use rt_core::*;
-use crate::{geometry::Sphere, hittable_list::HittableList, Hittable};
+use crate::{Hittable, geometry::Sphere, hittable_list::HittableList, materials::Lambertian};
 
 #[test]
 fn test_hittable_list_finds_closest_object() {
     let mut world = HittableList::new();
+    let material = Arc::new(Lambertian::new(Vec3::new(1.00, 1.00, 1.00)));
     
     // Esfera lejana en Z = -2.0
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -2.0), 0.5)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -2.0), 0.5, material.clone())));
     // Esfera cercana en Z = -1.0 (Esta debería tapar a la otra)
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, material)));
 
     // Un rayo que avanza directo por el eje Z negativo
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));

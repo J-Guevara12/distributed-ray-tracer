@@ -11,6 +11,7 @@ futures-util = "0.3.32"
 image = "0.25"
 rt-renderer = { version = "0.1.0", path = "../rt-renderer" }
 rt-core = { version = "0.1.0", path = "../rt-core" }
+rt-scene = { version = "0.1.0", path = "../rt-scene" }
 serde_json = "1.0.150"
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"

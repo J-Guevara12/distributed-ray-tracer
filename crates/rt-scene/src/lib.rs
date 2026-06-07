@@ -24,5 +24,9 @@ pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>;
 }
 
+pub trait Material {
+    fn scatter(&self, ray_in: &Ray, rec: &HitRecord) -> Option<(Vec3, Ray)>;
+}
+
 #[cfg(test)]
 mod tests;

@@ -1,6 +1,7 @@
 use axum::{routing::get, Router};
-use rt_core::{Point3, RayTracer};
-use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene};
+use rt_core::{Point3};
+use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tracers::NormalTracer};
+use rt_scene::{geometry::Sphere, hittable_list::HittableList};
 use tokio::sync::broadcast;
 use tower_http::cors::{CorsLayer, Any};
 use std::{net::SocketAddr, sync::{Arc, atomic::AtomicBool}, time::Instant};
@@ -10,30 +11,9 @@ use crate::state::AppState;
 mod state;
 mod handlers;
 
-struct GradientTracer;
-
-impl RayTracer for GradientTracer {
-    fn trace_ray(&self, ray: rt_core::Ray) -> [u8; 3] {
-        let unit_direction = ray.direction;
-
-        let t = 0.5 * (unit_direction.y + 1.0);
-
-        let r = (1.0 - t) * 1.0 + t * 0.5;
-        let g = (1.0 - t) * 1.0 + t * 0.7;
-        let b = (1.0 - t) * 1.0 + t * 1.0;
-
-        [
-            (r * 255.99) as u8,
-            (g * 255.99) as u8,
-            (b * 255.99) as u8,
-        ]
-    }
-}
-
 #[tokio::main]
 async fn main() {
     let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
-
 
     tracing_subscriber::fmt()
         .with_writer(non_blocking)
@@ -43,7 +23,7 @@ async fn main() {
     let aspect_ratio = 16.0 / 9.0;
     let image_width = 1920;
     let stride = 3;
-    let tile_size = 32;
+    let tile_size = 128;
 
     let camera_config = CameraConfig{
         aspect_ratio,
@@ -59,6 +39,11 @@ async fn main() {
 
     let width = camera.width;
     let height = camera.height;
+
+    let mut world = HittableList::new();
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
+
 
     println!("Iniciando rt-server...");
     println!("Resolución de renderizado: {}x{} (Tile Size: {})", width, height, tile_size);
@@ -77,7 +62,7 @@ async fn main() {
     let tx_worker = tx_stream.clone();
     let is_finished_worker = state.is_finished.clone();
 
-    let tracer = Arc::new(GradientTracer);
+    let tracer = Arc::new(NormalTracer::new(Arc::new(world)));
 
     tokio::task::spawn_blocking(move || {
         println!("¡Motor de renderizado incializado!");

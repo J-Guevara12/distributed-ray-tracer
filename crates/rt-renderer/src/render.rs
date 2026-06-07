@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tracing::{span, Level};
 use rayon::prelude::*;
 
-use rt_core::RayTracer;
+use rt_core::{Color, RayTracer};
 use tokio::sync::broadcast;
 
 use crate::{camera::Camera, framebuffer::FrameBuffer, tiles::{TileGenerator, TileResult}};
@@ -16,6 +16,7 @@ pub fn render_scene<T: RayTracer> (
     stride: usize
 ){
     let generator = TileGenerator::new(camera.width, camera.height, tile_size);
+    let samples_float = camera.samples_per_pixel as f32;
 
     let render_span = span!(Level::INFO, "scene_render_total", width=camera.width, height = camera.height);
     let _enter = render_span.enter();
@@ -32,23 +33,19 @@ pub fn render_scene<T: RayTracer> (
                 let x = tile.x + local_x;
                 let y = tile.y + local_y;
 
-                let mut r = 0.0;
-                let mut g = 0.0;
-                let mut b = 0.0;
+                let mut color_accumulator = Color::new(0.0, 0.0, 0.0);
 
                 for sample in 0..camera.samples_per_pixel {
                     let ray = camera.get_ray(x, y, sample);
 
                     let color = tracer.trace_ray(ray);
 
-                    r += color[0] as f32;
-                    g += color[1] as f32;
-                    b += color[2] as f32;
+                    color_accumulator += color;
                 }
 
-                pixels.push((r/camera.samples_per_pixel as f32) as u8);
-                pixels.push((g/camera.samples_per_pixel as f32) as u8);
-                pixels.push((b/camera.samples_per_pixel as f32) as u8);
+                pixels.push((255.99*color_accumulator[0]/samples_float) as u8);
+                pixels.push((255.99*color_accumulator[1]/samples_float) as u8);
+                pixels.push((255.99*color_accumulator[2]/samples_float) as u8);
             }
         }
         let result = TileResult { tile_id: tile.id, pixels, original_tile: *tile };

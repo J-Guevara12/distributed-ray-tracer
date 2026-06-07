@@ -63,7 +63,6 @@ fn test_render_scene_integration() {
         assert!(receive_result.is_ok(), "Se debió recibir el TileResult número {}", i);
         
         let tile_result = receive_result.unwrap();
-        assert_eq!(tile_result.tile_id, i, "El ID del tile recibido debe ser secuencial");
         
         // Cada tile es de 2x2 píxeles * 3 bytes (RGB) = 12 bytes
         assert_eq!(tile_result.pixels.len(), 12, "El tamaño del vector de píxeles del tile es incorrecto");

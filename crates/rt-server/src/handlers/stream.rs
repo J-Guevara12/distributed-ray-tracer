@@ -6,10 +6,6 @@ use rt_renderer::tiles::{Tile, TileResult};
 
 use crate::state::AppState;
 
-pub async fn health_handler() -> &'static str {
-    "hello ray tracer"
-}
-
 pub async fn render_stream_handler(State(state): State<AppState>) -> Sse<impl Stream<Item = Result<Event, Infallible>>>{
     let rx = state.tx_stream.subscribe();
 

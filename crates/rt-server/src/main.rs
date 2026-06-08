@@ -1,15 +1,14 @@
-use axum::{routing::get, Router};
+use axum::Router;
 use rt_core::{Point3, Vec3};
-use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tracers::PathTracer};
+use rt_renderer::{camera::Camera, render::render_scene, tracers::PathTracer};
 use rt_scene::{geometry::Sphere, hittable_list::HittableList, materials::{Dielectric, Lambertian, Metal}};
-use tokio::sync::broadcast;
-use tower_http::cors::{CorsLayer, Any};
-use std::{net::SocketAddr, sync::{Arc, atomic::AtomicBool}, time::Instant};
+use std::{net::SocketAddr, sync::Arc, time::Instant};
 use tracing_subscriber::fmt::format::FmtSpan;
 
-use crate::state::AppState;
+use crate::{state::AppState, router::setup_app};
 mod state;
 mod handlers;
+mod router;
 
 #[tokio::main]
 async fn main() {
@@ -20,25 +19,11 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .with_span_events(FmtSpan::CLOSE)
         .init();
-    let aspect_ratio = 16.0 / 9.0;
-    let image_width = 1920;
+
     let stride = 3;
+    let state = AppState::init_default(100, stride);
+
     let tile_size = 128;
-
-    let camera_config = CameraConfig{
-        aspect_ratio,
-        image_width,
-        fov: 90.0,
-        look_from: Point3::new(0.0, 0.0, 0.0),
-        look_at: Point3::new(0.0, 0.0, -1.0),
-        vup: Point3::new(0.0, 1.0, 0.0),
-        samples_per_pixel: 100,
-    };
-    
-    let camera = Arc::new(Camera::new(camera_config));
-
-    let width = camera.width;
-    let height = camera.height;
 
     let material_main = Arc::new(Lambertian::new(Vec3::new(1.0, 0.0, 0.0)));
     let material_2 = Arc::new(Metal::new(Vec3::new(1.0, 1.0, 1.0), 0.0));
@@ -56,22 +41,22 @@ async fn main() {
     world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, material_main)));
     world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, material_ground)));
 
+    let mut camera = Arc::new(Camera::default());
+
+    if let Ok(camera_lock) = state.camera.read() {
+        camera = Arc::clone(&*camera_lock);
+    }
+
+    let width = camera.width;
+    let height = camera.height;
 
     println!("Iniciando rt-server...");
     println!("Resolución de renderizado: {}x{} (Tile Size: {})", width, height, tile_size);
 
-    let framebuffer = Arc::new(FrameBuffer::new(width, height, stride));
-    let (tx_stream, _) = broadcast::channel(100);
-
-    let state = AppState {
-        framebuffer: Arc::clone(&framebuffer),
-        tx_stream: tx_stream.clone(),
-        is_finished: Arc::new(AtomicBool::new(false)),
-    };
 
     let camera_worker = Arc::clone(&camera);
-    let fb_worker = Arc::clone(&framebuffer);
-    let tx_worker = tx_stream.clone();
+    let fb_worker = Arc::clone(&state.framebuffer);
+    let tx_worker = state.tx_stream.clone();
     let is_finished_worker = state.is_finished.clone();
 
     let tracer = Arc::new(PathTracer{max_depth: 10});
@@ -84,15 +69,7 @@ async fn main() {
         println!("¡Renderizado completado! {} ms", instant.elapsed().as_millis());
     });
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any);
-
-    let app = Router::new()
-        .route("/health", get(handlers::health_handler))
-        .route("/render/stream", get(handlers::render_stream_handler))
-        .with_state(state)
-        .layer(cors);
+    let app = setup_app(Router::new(), state);
 
     let addr = SocketAddr::from(([127, 0, 1, 1], 3000));
     println!("Servidor de pruebas corriendo en http://{}", addr);

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 fastrand = "2.4.1"
-glam = "0.33"
+glam = { version = "0.33", features = ["serde"] }
 
 [dev-dependencies]
 axum-test = "20.1.0"

@@ -1,7 +1,12 @@
+use optional_struct::*;
 use rt_core::{Point3, Ray, Vec3};
 use fastrand::Rng;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Copy)]
+pub use optional_struct::Applicable;
+
+#[optional_struct(CameraUpdatePayload)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CameraConfig {
     pub aspect_ratio: f32,
     pub image_width: u32,
@@ -12,6 +17,7 @@ pub struct CameraConfig {
     pub samples_per_pixel: u32,
 }
 
+
 #[derive(Debug, Clone)]
 pub struct Camera {
     pub origin: Point3,
@@ -21,6 +27,7 @@ pub struct Camera {
     pub samples_per_pixel: u32, // Para el cálculo de Antialiasing
     pub width: u32,
     pub height: u32,
+    pub config: CameraConfig
 }
 
 impl Camera {
@@ -46,7 +53,20 @@ impl Camera {
         let viewport_upper_left = origin - w - (u * viewport_width * 0.5) - (v * viewport_height * 0.5);
         let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
-        Self { origin, pixel00_loc, pixel_delta_u, pixel_delta_v, samples_per_pixel , width, height}
+        Self { origin, pixel00_loc, pixel_delta_u, pixel_delta_v, samples_per_pixel , width, height, config }
+    }
+
+    pub fn default() -> Self {
+        let config = CameraConfig {
+            aspect_ratio: 16.0/9.0,
+            image_width: 1920,
+            fov: 90.0,
+            look_from: Point3::new(0.0, 0.0, 0.0),
+            look_at: Vec3::new(0.0, 0.0, -1.0),
+            vup: Point3::new(0.0, 1.0, 0.0),
+            samples_per_pixel: 10,
+        };
+        return Self::new(config)
     }
 
     /// Genera un rayo dirigido al píxel (x, y). 

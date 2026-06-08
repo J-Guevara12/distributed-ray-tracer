@@ -187,6 +187,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
 dependencies = [
  "axum-core",
+ "axum-macros",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -230,6 +231,17 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "axum-macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7aa268c23bfbbd2c4363b9cd302a4f504fb2a9dfe7e3451d66f35dd392e20aca"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -925,6 +937,9 @@ name = "glam"
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fb167719045debebe9f532320accc7b5c993c5a3b813f5696a11d5ca7bdc57b"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "h2"
@@ -1700,6 +1715,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "optional_struct"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14199f59efce6ed2c5854f0abc725c32eedfbd02c6ef82c9733c726f3fc6dc91"
+dependencies = [
+ "optional_struct_macro",
+ "serde",
+]
+
+[[package]]
+name = "optional_struct_macro"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5eba042d9efe5e108e0df9ce2f85c540fc4f94f41c6821cbcf70ed47c1221da"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "page_size"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2181,6 +2217,7 @@ dependencies = [
  "glam",
  "image",
  "insta",
+ "optional_struct",
  "proptest",
  "rayon",
  "rt-core",
@@ -2219,10 +2256,12 @@ dependencies = [
  "futures-util",
  "image",
  "insta",
+ "optional_struct",
  "proptest",
  "rt-core",
  "rt-renderer",
  "rt-scene",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-test",

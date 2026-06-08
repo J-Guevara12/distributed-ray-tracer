@@ -1,7 +1,7 @@
 use axum::{routing::get, Router};
 use rt_core::{Point3, Vec3};
-use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tracers::NormalTracer};
-use rt_scene::{geometry::Sphere, hittable_list::HittableList, materials::Lambertian};
+use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tracers::PathTracer};
+use rt_scene::{geometry::Sphere, hittable_list::HittableList, materials::{Dielectric, Lambertian, Metal}};
 use tokio::sync::broadcast;
 use tower_http::cors::{CorsLayer, Any};
 use std::{net::SocketAddr, sync::{Arc, atomic::AtomicBool}, time::Instant};
@@ -17,7 +17,7 @@ async fn main() {
 
     tracing_subscriber::fmt()
         .with_writer(non_blocking)
-        .with_max_level(tracing::Level::ERROR)
+        .with_max_level(tracing::Level::INFO)
         .with_span_events(FmtSpan::CLOSE)
         .init();
     let aspect_ratio = 16.0 / 9.0;
@@ -32,7 +32,7 @@ async fn main() {
         look_from: Point3::new(0.0, 0.0, 0.0),
         look_at: Point3::new(0.0, 0.0, -1.0),
         vup: Point3::new(0.0, 1.0, 0.0),
-        samples_per_pixel: 10,
+        samples_per_pixel: 100,
     };
     
     let camera = Arc::new(Camera::new(camera_config));
@@ -40,11 +40,21 @@ async fn main() {
     let width = camera.width;
     let height = camera.height;
 
-    let material = Arc::new(Lambertian::new(Vec3::new(0.0, 5.0, 0.0)));
+    let material_main = Arc::new(Lambertian::new(Vec3::new(1.0, 0.0, 0.0)));
+    let material_2 = Arc::new(Metal::new(Vec3::new(1.0, 1.0, 1.0), 0.0));
+    let material_3 = Arc::new(Metal::new(Vec3::new(0.0, 0.4, 0.8), 0.6));
+    let material_4 = Arc::new(Dielectric::new(1.5));
+    let material_5 = Arc::new(Dielectric::new(1.0/1.5));
+    let material_ground = Arc::new(Lambertian::new(Vec3::new(0.0, 0.9, 0.2)));
 
     let mut world = HittableList::new();
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, material.clone())));
-    world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, material)));
+
+    world.add(Arc::new(Sphere::new(Point3::new(-1.3, 0.0, -1.4), 0.5, material_2)));
+    world.add(Arc::new(Sphere::new(Point3::new(1.3, 0.0, -1.8), 0.5, material_3)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.8, -1.4), 0.5, material_4)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.8, -1.4), 0.1, material_5)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, material_main)));
+    world.add(Arc::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, material_ground)));
 
 
     println!("Iniciando rt-server...");
@@ -64,7 +74,7 @@ async fn main() {
     let tx_worker = tx_stream.clone();
     let is_finished_worker = state.is_finished.clone();
 
-    let tracer = Arc::new(NormalTracer{});
+    let tracer = Arc::new(PathTracer{max_depth: 10});
 
     tokio::task::spawn_blocking(move || {
         println!("¡Motor de renderizado incializado!");

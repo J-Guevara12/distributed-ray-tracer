@@ -34,4 +34,47 @@ impl RayTracer for NormalTracer {
 }
 
 
+pub struct PathTracer {
+    pub max_depth: u32,
+}
+
+impl PathTracer {
+    pub fn new(max_depth: u32) -> Self {
+        Self {max_depth}
+    }
+    
+}
+
+impl RayTracer for PathTracer {
+    fn trace_ray(&self, ray: Ray,  world: &dyn Hittable) -> Color {
+        let mut current_ray = ray;
+
+        let mut attenuation = Color::ONE;
+
+        for _ in 0..self.max_depth {
+            let interval = Interval::new(0.001, f32::INFINITY);
+
+            if let Some(rec) = world.hit(&current_ray, interval) {
+                if let Some((attenuation_material, scattered_ray)) = rec.material.scatter(&current_ray, &rec){
+                    attenuation *= attenuation_material;
+                    current_ray = scattered_ray;
+                }
+                else {
+                    return Color::ZERO;
+                }
+
+            } else {
+                let unit_direction = current_ray.direction;
+
+                let t = 0.5 * (unit_direction.y + 1.0);
+                let sky = Color::ONE * (1.0 - t) + Color::new(0.5, 0.7, 1.0) * t;
+
+                return attenuation * sky;
+            }
+        }
+        Color::ZERO
+    }
+}
+
+
 

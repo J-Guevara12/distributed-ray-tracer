@@ -1,6 +1,7 @@
 pub mod stream;
 pub mod health;
 pub mod camera;
+pub mod render;
 
 use serde::Serialize;
 

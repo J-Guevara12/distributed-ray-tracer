@@ -15,7 +15,7 @@ impl AppState {
         let camera = Arc::new(Camera::default());
         let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height, stride));
         let (tx_stream, _) = broadcast::channel(n_channels);
-        let is_finished = Arc::new(AtomicBool::new(false));
+        let is_finished = Arc::new(AtomicBool::new(true));
 
         let camera = Arc::new(RwLock::new(camera));
 

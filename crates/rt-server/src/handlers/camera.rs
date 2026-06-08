@@ -15,7 +15,10 @@ pub async fn get_camera_handler(State(state): State<AppState>) -> Result<Json<Ca
 }
 
 #[axum::debug_handler(state = AppState)]
-pub async fn update_camera_handler(State(state): State<AppState>, Json(payload): Json<CameraUpdatePayload>) -> Result<(StatusCode, Json<CameraConfig>), (StatusCode, Json<ErrorResponse>)> {
+pub async fn update_camera_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<CameraUpdatePayload>,
+) -> Result<(StatusCode, Json<CameraConfig>), (StatusCode, Json<ErrorResponse>)> {
     let mut config = match state.camera.read() {
         Ok(camera_lock) => camera_lock.config,
         Err(_) => {
@@ -48,7 +51,7 @@ pub async fn update_camera_handler(State(state): State<AppState>, Json(payload):
         },
         Err(_) => {
             let error_body = Json(ErrorResponse{
-                error: "Critical failure while trying to write the new camera to memory.".to_string()
+                error: "Fallo crítico al intentar escribir la nueva cámara en memoria.".to_string()
             });
 
             Err((StatusCode::INTERNAL_SERVER_ERROR, error_body))

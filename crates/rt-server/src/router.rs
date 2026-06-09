@@ -12,9 +12,9 @@ pub fn setup_app(app: Router<AppState>, state: AppState) -> Router {
         .route("/health", get(handlers::health::health_handler))
         .route("/camera", get(handlers::camera::get_camera_handler))
         .route("/camera", put(handlers::camera::update_camera_handler))
+        .route("/scene", get(handlers::scene::get_scene_handler))
         .route("/render", post(handlers::render::post_render))
         .route("/render/stream", get(handlers::stream::render_stream_handler))
         .with_state(state)
         .layer(cors)
-
 }

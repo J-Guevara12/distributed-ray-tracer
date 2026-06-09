@@ -1,5 +1,7 @@
 pub use glam::Vec3A;
 
+pub mod dto;
+
 pub type Vec3 = Vec3A;
 pub type Color = Vec3A;
 pub type Point3 = Vec3A;

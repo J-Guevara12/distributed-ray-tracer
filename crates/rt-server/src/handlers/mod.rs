@@ -2,6 +2,7 @@ pub mod stream;
 pub mod health;
 pub mod camera;
 pub mod render;
+pub mod scene;
 
 use serde::Serialize;
 

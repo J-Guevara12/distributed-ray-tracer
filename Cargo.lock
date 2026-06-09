@@ -2203,6 +2203,7 @@ dependencies = [
  "glam",
  "insta",
  "proptest",
+ "serde",
  "tokio-test",
 ]
 

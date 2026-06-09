@@ -1,4 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::{fs::File, io::BufWriter, path::Path, sync::{Arc, RwLock}};
+use image::ImageError;
+
 use crate::tiles::TileResult;
 
 pub struct FrameBuffer {
@@ -40,5 +42,19 @@ impl FrameBuffer {
         let data = self.data.read().unwrap();
 
         data.to_vec()
+    }
+
+    pub fn save_png<P: AsRef<Path>>(&self, path:  P) -> Result<(), ImageError>{
+        let data = self.data.read().unwrap();
+        let expected_size = (self.width * self.height * 3) as usize;
+
+        let file = File::create(path).unwrap();
+
+        let ref mut w = BufWriter::new(file);
+        let encoder = image::codecs::png::PngEncoder::new(w);
+
+        image::ImageEncoder::write_image(encoder, &data[..expected_size], self.width, self.height, image::ExtendedColorType::Rgb8).unwrap();
+
+        Ok(())
     }
 }

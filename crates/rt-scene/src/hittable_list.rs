@@ -1,6 +1,8 @@
-use crate::*;
+use rt_core::dto::{MaterialDTO, ObjectDTO, ScenePayload};
 
-use std::sync::Arc;
+use crate::{geometry::Sphere, materials::{Dielectric, Lambertian, Metal}, *};
+
+use std::{collections::HashMap, sync::Arc};
 use crate::Hittable;
 
 #[derive(Default)]
@@ -40,3 +42,41 @@ impl Hittable for HittableList {
     }
 }
 
+impl From<&ScenePayload> for HittableList {
+    fn from(value: &ScenePayload) -> Self {
+        let mut mundo = HittableList::new();
+        let mut materials = HashMap::new();
+
+        for (id, mat_dto) in &value.materials {
+            let material: Arc<dyn Material> = match mat_dto {
+                MaterialDTO::Lambertian { albedo } => {
+                    Arc::new(Lambertian::new(*albedo))
+                }
+                MaterialDTO::Metal { albedo, fuzz } => {
+                    Arc::new(Metal::new(*albedo, *fuzz))
+                }
+                MaterialDTO::Direlectric { refraction_index } => {
+                    Arc::new(Dielectric::new(*refraction_index))
+                }
+                
+            };
+            materials.insert(id.clone(), material);
+        }
+        for obj in &value.objects {
+            match obj {
+                ObjectDTO::Sphere { center, radius, material } => {
+                    if let Some(mat) = materials.get(material) {
+                        let sphere = Sphere::new(*center, *radius, Arc::clone(mat));
+
+                        mundo.add(Arc::new(sphere));
+                    } else {
+                        eprintln!("Warning: El material '{}' no fue encontrado para la esfera.", material);
+                    }
+                },
+            }
+        }
+
+
+        mundo
+    }
+}

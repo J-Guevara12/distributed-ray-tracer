@@ -22,8 +22,9 @@ impl AppState {
         let is_finished = Arc::new(AtomicBool::new(true));
 
         let camera = Arc::new(RwLock::new(camera));
-        let world = Arc::new(RwLock::new(Arc::new(HittableList::new()) as Arc<dyn Hittable + Send + Sync>));
-        let scene_data = Arc::new(RwLock::new(Some(ScenePayload::new())));
+        let scene_data = ScenePayload::new();
+        let world = Arc::new(RwLock::new(Arc::new(HittableList::from(&scene_data)) as Arc<dyn Hittable + Send + Sync>));
+        let scene_data = Arc::new(RwLock::new(Some(scene_data)));
 
         Self { framebuffer, tx_stream, is_finished, camera , world , scene_data }
     }

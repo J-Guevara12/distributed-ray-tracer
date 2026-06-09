@@ -14,7 +14,6 @@ pub async fn get_camera_handler(State(state): State<AppState>) -> Result<Json<Ca
     return Ok(Json(config))
 }
 
-#[axum::debug_handler(state = AppState)]
 pub async fn update_camera_handler(
     State(state): State<AppState>,
     Json(payload): Json<CameraUpdatePayload>,

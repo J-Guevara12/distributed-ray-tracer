@@ -17,11 +17,10 @@ impl Sphere {
 impl Hittable for Sphere {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
         let oc = self.center - ray.origin;
-        let a = ray.direction.length_squared();
         let h = ray.direction.dot(oc);
         let c = oc.length_squared() - self.radius * self.radius;
 
-        let discriminant = h * h - a * c;
+        let discriminant = h * h -  c;
 
         if discriminant < 0.0 {
             return None;
@@ -29,10 +28,10 @@ impl Hittable for Sphere {
 
         let sqrtd = discriminant.sqrt();
 
-        let mut root = (h-sqrtd) / a;
+        let mut root = h-sqrtd;
 
         if !ray_t.surrounds(root) {
-            root = (h+sqrtd) / a;
+            root = h+sqrtd;
             if !ray_t.surrounds(root) {
                 return None;
             }

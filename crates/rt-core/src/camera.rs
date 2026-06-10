@@ -1,6 +1,5 @@
 use optional_struct::*;
-use rt_core::{Point3, Ray, Vec3};
-use fastrand::Rng;
+use crate::{Point3, Ray, Vec3};
 use serde::{Serialize, Deserialize};
 
 pub use optional_struct::Applicable;
@@ -92,10 +91,8 @@ impl Camera {
     }
 
     fn sample_square(&self) -> Vec3 {
-        let mut rng = Rng::new();
-
-        let rand_x = rng.f32() - 0.5;
-        let rand_y = rng.f32() - 0.5;
+        let rand_x = fastrand::f32() - 0.5;
+        let rand_y = fastrand::f32() - 0.5;
 
         Vec3::new(rand_x, rand_y, 0.0)
 

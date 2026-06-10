@@ -1,12 +1,14 @@
 use axum::Router;
 use axum_test::TestServer;
+use tokio::sync::mpsc;
 use crate::state::AppState;
 use crate::handlers::stream::render_stream_handler;
 
 //#[tokio::test]
 async fn test_sse_render_stream_headers() {
     // 1. Configurar infraestructura mínima del Estado global de pruebas
-    let state = AppState::init_default(100, 3);
+    let (tx, _) = mpsc::channel(100);
+    let state = AppState::init_default(100, 3, tx);
 
     // 2. Construir router de pruebas acoplado al handler SSE
     let app: Router<()> = Router::new()

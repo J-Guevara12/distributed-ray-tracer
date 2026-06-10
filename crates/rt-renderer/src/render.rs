@@ -26,8 +26,6 @@ pub fn render_scene<T: RayTracer> (
     let tiles: Vec<_> = generator.collect();
 
     tiles.par_iter().for_each(|tile| {
-        let tile_span = span!(Level::DEBUG, "render_tile", tile_id = tile.id);
-        let _tile_enter = tile_span.enter();
         let mut pixels: Vec<u8> = Vec::with_capacity((tile.width * tile.height) as usize * stride);
 
         for local_y in 0..tile.height {
@@ -44,10 +42,11 @@ pub fn render_scene<T: RayTracer> (
 
                     color_accumulator += color;
                 }
+                let gamma_corrected = 255.9 * (color_accumulator / samples_float).sqrt();
 
-                pixels.push((255.99*color_accumulator[0]/samples_float) as u8);
-                pixels.push((255.99*color_accumulator[1]/samples_float) as u8);
-                pixels.push((255.99*color_accumulator[2]/samples_float) as u8);
+                pixels.push(gamma_corrected[0] as u8);
+                pixels.push(gamma_corrected[1] as u8);
+                pixels.push(gamma_corrected[2] as u8);
             }
         }
         let result = TileResult { tile_id: tile.id, pixels, original_tile: *tile };

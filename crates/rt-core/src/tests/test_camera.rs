@@ -1,4 +1,4 @@
-use rt_core::{Point3, Vec3};
+use crate::{Point3, Vec3};
 
 use crate::camera::{Camera, CameraConfig};
 

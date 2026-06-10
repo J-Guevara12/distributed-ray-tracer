@@ -10,6 +10,7 @@ mod router;
 #[tokio::main]
 async fn main() {
     let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
+    let (tx, rx) = tokio::sync::mpsc::channel(1000);
 
     tracing_subscriber::fmt()
         .with_writer(non_blocking)
@@ -18,7 +19,7 @@ async fn main() {
         .init();
 
     let stride = 3;
-    let state = AppState::init_default(100, stride);
+    let state = AppState::init_default(100, stride, tx);
 
     let app = setup_app(Router::new(), state);
 

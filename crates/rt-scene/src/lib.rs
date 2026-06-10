@@ -19,7 +19,7 @@ impl<'a> HitRecord<'a> {
     pub fn new(ray: &Ray, t: f32, outward_normal: Vec3, p: Point3, material: &'a dyn Material) -> Self {
         // Determinar si el rayo viene de afuera o de adentro del objeto
         let front_face = ray.direction.dot(outward_normal) < 0.0;
-        let normal = if front_face { outward_normal.normalize() } else { -outward_normal.normalize() };
+        let normal = if front_face { outward_normal } else { -outward_normal };
 
         Self { p, normal, t, front_face , material }
     }

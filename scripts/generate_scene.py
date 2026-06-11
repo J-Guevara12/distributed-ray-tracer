@@ -61,8 +61,8 @@ def generate_random_scene():
 
     # 3. Generación procedural de las ~484 esferas pequeñas (Grilla de -11 a 11)
     mat_counter = 0
-    for a in range(-22, 22):
-        for b in range(-22, 22):
+    for a in range(-11, 11):
+        for b in range(-11, 11):
             choose_mat = random.random()
             
             # Tamaño aleatorio sutil para darle dinamismo, promedio de 0.2

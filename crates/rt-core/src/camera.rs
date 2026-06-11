@@ -14,6 +14,8 @@ pub struct CameraConfig {
     pub look_at: Point3,
     pub vup: Vec3,
     pub samples_per_pixel: u32,
+    pub defocus_angle: f32,
+    pub focus_dist: f32,
 }
 
 
@@ -26,6 +28,8 @@ pub struct Camera {
     pub samples_per_pixel: u32, // Para el cálculo de Antialiasing
     pub width: u32,
     pub height: u32,
+    pub defocus_disk_u: Vec3,
+    pub defocus_disk_v: Vec3,
     pub config: CameraConfig
 }
 
@@ -38,7 +42,7 @@ impl Camera {
         let width = config.image_width;
         let height = ( width as f32 / config.aspect_ratio) as u32;
 
-        let viewport_height = 2.0*(config.fov.to_radians()/2.0).tan();
+        let viewport_height = 2.0*(config.fov.to_radians()/2.0).tan()*config.focus_dist;
         let viewport_width = viewport_height * config.aspect_ratio;
 
         let w = (origin - config.look_at).normalize();
@@ -49,21 +53,30 @@ impl Camera {
         let pixel_delta_v = (viewport_height/height as f32)*v;
 
 
-        let viewport_upper_left = origin - w - (u * viewport_width * 0.5) - (v * viewport_height * 0.5);
+        let viewport_upper_left = origin - config.focus_dist * w - (u * viewport_width * 0.5) - (v * viewport_height * 0.5);
         let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
-        Self { origin, pixel00_loc, pixel_delta_u, pixel_delta_v, samples_per_pixel , width, height, config }
+        let defocus_radius = config.focus_dist * (config.defocus_angle.to_radians()/2.0).tan();
+        let defocus_disk_u = u * defocus_radius;
+        let defocus_disk_v = v * defocus_radius;
+
+        Self { origin, pixel00_loc, pixel_delta_u, pixel_delta_v, samples_per_pixel , width, height, config , defocus_disk_u, defocus_disk_v }
     }
 
     pub fn default() -> Self {
+        let look_from = Point3::new(0.0, 0.0, 0.0);
+        let look_at = Point3::new(0.0, 0.0, -1.0);
+        let focus_dist = (look_at - look_from).length_squared();
         let config = CameraConfig {
             aspect_ratio: 16.0/9.0,
             image_width: 1920,
             fov: 90.0,
-            look_from: Point3::new(0.0, 0.0, 0.0),
-            look_at: Vec3::new(0.0, 0.0, -1.0),
+            look_from: look_from,
+            look_at: look_at,
             vup: Point3::new(0.0, 1.0, 0.0),
             samples_per_pixel: 10,
+            defocus_angle: 0.0,
+            focus_dist: focus_dist
         };
         return Self::new(config)
     }
@@ -73,7 +86,6 @@ impl Camera {
     pub fn get_ray(&self, x: u32, y: u32, sample: u32) -> Ray {
         debug_assert!(x < self.width, "get_ray: x ({}) must be less than the camera width ({})", x, self.width);
         debug_assert!(y < self.height, "get_ray: y ({}) must be less than the camera height ({})", y, self.height);
-        let origin = self.origin;
 
         let offset = if sample == 0 {
             Vec3::new(0.0, 0.0, 0.0)
@@ -84,6 +96,15 @@ impl Camera {
         let  destination = self.pixel00_loc 
             + (x as f32+offset.x) * self.pixel_delta_u 
             + (y as f32 + offset.y) * self.pixel_delta_v;
+
+        let origin = if self.config.defocus_angle <= 0.0 {
+            self.origin
+        } else {
+            let lens_sample = self.sample_disk_in_unit_circle();
+            self.origin 
+                + (lens_sample.x * self.defocus_disk_u) 
+                + (lens_sample.y * self.defocus_disk_v)
+        };
 
         let direction = (destination-origin).normalize();
 
@@ -97,4 +118,20 @@ impl Camera {
         Vec3::new(rand_x, rand_y, 0.0)
 
     }
+
+    fn sample_disk_in_unit_circle(&self) -> Vec3 {
+        loop {
+            // Generamos un punto en un cuadrado de [-1, 1] en X y Y
+            let p = Vec3::new(
+                fastrand::f32() * 2.0 - 1.0,
+                fastrand::f32() * 2.0 - 1.0,
+                0.0,
+            );
+            // Si el punto está dentro del círculo unitario (magnitud al cuadrado < 1), lo devolvemos
+            if p.length_squared() < 1.0 {
+                return p;
+            }
+        }
+    }
+
 }

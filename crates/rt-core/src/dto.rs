@@ -32,7 +32,13 @@ pub enum ObjectDTO {
 }
 
 impl ScenePayload {
-    pub fn new() -> Self {
+    pub fn new(materials: HashMap<String, MaterialDTO>, objects: Vec<ObjectDTO>) -> Self {
+        Self { materials, objects }
+    }
+}
+
+impl Default for ScenePayload {
+    fn default() -> Self {
         let material_ground = MaterialDTO::Lambertian {
             albedo: Vec3::new(0.0, 0.9, 0.2),
         };
@@ -63,39 +69,38 @@ impl ScenePayload {
         materials.insert("up_out".to_string(), material_up_out);
         materials.insert("up_in".to_string(), material_up_in);
 
-        let mut objects = Vec::new();
-
-        objects.push(ObjectDTO::Sphere {
-            center: Point3::new(0.0, -100.5, -1.0),
-            radius: 100.0,
-            material: "ground".to_string(),
-        });
-        objects.push(ObjectDTO::Sphere {
-            center: Point3::new(0.0, 0.0, -1.0),
-            radius: 0.5,
-            material: "front".to_string(),
-        });
-        objects.push(ObjectDTO::Sphere {
-            center: Point3::new(-1.3, 0.0, -1.2),
-            radius: 0.5,
-            material: "left".to_string(),
-        });
-        objects.push(ObjectDTO::Sphere {
-            center: Point3::new(1.3, 0.0, -1.2),
-            radius: 0.5,
-            material: "right".to_string(),
-        });
-        objects.push(ObjectDTO::Sphere {
-            center: Point3::new(0.0, 0.6, -1.0),
-            radius: 0.5,
-            material: "up_out".to_string(),
-        });
-        objects.push(ObjectDTO::Sphere {
-            center: Point3::new(0.0, 0.6, -1.0),
-            radius: 0.2,
-            material: "up_in".to_string(),
-        });
-
-        Self { materials, objects }
+        let objects = vec![
+            ObjectDTO::Sphere {
+                center: Point3::new(0.0, -100.5, -1.0),
+                radius: 100.0,
+                material: "ground".to_string(),
+            },
+            ObjectDTO::Sphere {
+                center: Point3::new(0.0, 0.0, -1.0),
+                radius: 0.5,
+                material: "front".to_string(),
+            },
+            ObjectDTO::Sphere {
+                center: Point3::new(-1.3, 0.0, -1.2),
+                radius: 0.5,
+                material: "left".to_string(),
+            },
+            ObjectDTO::Sphere {
+                center: Point3::new(1.3, 0.0, -1.2),
+                radius: 0.5,
+                material: "right".to_string(),
+            },
+            ObjectDTO::Sphere {
+                center: Point3::new(0.0, 0.6, -1.0),
+                radius: 0.5,
+                material: "up_out".to_string(),
+            },
+            ObjectDTO::Sphere {
+                center: Point3::new(0.0, 0.6, -1.0),
+                radius: 0.2,
+                material: "up_in".to_string(),
+            },
+        ];
+        Self::new(materials, objects)
     }
 }

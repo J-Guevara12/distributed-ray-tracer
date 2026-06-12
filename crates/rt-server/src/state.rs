@@ -1,7 +1,10 @@
-use std::sync::{Arc, RwLock, atomic::{AtomicBool, AtomicUsize}};
 use rt_core::{Job, dto::ScenePayload};
 use rt_renderer::{camera::Camera, framebuffer::FrameBuffer};
 use rt_scene::{Hittable, hittable_list::HittableList};
+use std::sync::{
+    Arc, RwLock,
+    atomic::{AtomicBool, AtomicUsize},
+};
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Clone)]
@@ -13,7 +16,7 @@ pub struct AppState {
     pub world: Arc<RwLock<Arc<dyn Hittable + Send + Sync>>>,
     pub scene_data: Arc<RwLock<Option<ScenePayload>>>,
     pub job_sender: mpsc::Sender<Job>,
-    pub active_jobs_counter: Arc<AtomicUsize>
+    pub active_jobs_counter: Arc<AtomicUsize>,
 }
 
 impl AppState {
@@ -25,10 +28,21 @@ impl AppState {
         let active_jobs_counter = Arc::new(AtomicUsize::new(0));
 
         let camera = Arc::new(RwLock::new(camera));
-        let scene_data = ScenePayload::new();
-        let world = Arc::new(RwLock::new(Arc::new(HittableList::from(&scene_data)) as Arc<dyn Hittable + Send + Sync>));
+        let scene_data = ScenePayload::default();
+        let world = Arc::new(RwLock::new(
+            Arc::new(HittableList::from(&scene_data)) as Arc<dyn Hittable + Send + Sync>
+        ));
         let scene_data = Arc::new(RwLock::new(Some(scene_data)));
 
-        Self { framebuffer, tx_stream, is_finished, camera , world , scene_data , job_sender, active_jobs_counter }
+        Self {
+            framebuffer,
+            tx_stream,
+            is_finished,
+            camera,
+            world,
+            scene_data,
+            job_sender,
+            active_jobs_counter,
+        }
     }
 }

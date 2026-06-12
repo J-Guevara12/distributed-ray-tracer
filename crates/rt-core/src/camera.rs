@@ -1,6 +1,6 @@
-use optional_struct::*;
 use crate::{Point3, Ray, Vec3};
-use serde::{Serialize, Deserialize};
+use optional_struct::*;
+use serde::{Deserialize, Serialize};
 
 pub use optional_struct::Applicable;
 
@@ -18,7 +18,6 @@ pub struct CameraConfig {
     pub focus_dist: f32,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct Camera {
     pub origin: Point3,
@@ -30,62 +29,67 @@ pub struct Camera {
     pub height: u32,
     pub defocus_disk_u: Vec3,
     pub defocus_disk_v: Vec3,
-    pub config: CameraConfig
+    pub config: CameraConfig,
 }
 
 impl Camera {
     // Inicializa y calcula la geometría del Viewport basado en la configuración.
     pub fn new(config: CameraConfig) -> Self {
-        let origin  = config.look_from;
+        let origin = config.look_from;
         let samples_per_pixel = config.samples_per_pixel;
 
         let width = config.image_width;
-        let height = ( width as f32 / config.aspect_ratio) as u32;
+        let height = (width as f32 / config.aspect_ratio) as u32;
 
-        let viewport_height = 2.0*(config.fov.to_radians()/2.0).tan()*config.focus_dist;
+        let viewport_height = 2.0 * (config.fov.to_radians() / 2.0).tan() * config.focus_dist;
         let viewport_width = viewport_height * config.aspect_ratio;
 
         let w = (origin - config.look_at).normalize();
         let u = (config.vup.cross(w)).normalize(); // Vector que apunta hacia la derecha de la cámara.
-        let v = u.cross(w).normalize();     //Vector que apunta hacia abajo de la cámara
+        let v = u.cross(w).normalize(); //Vector que apunta hacia abajo de la cámara
 
-        let pixel_delta_u = (viewport_width/width as f32)*u;
-        let pixel_delta_v = (viewport_height/height as f32)*v;
+        let pixel_delta_u = (viewport_width / width as f32) * u;
+        let pixel_delta_v = (viewport_height / height as f32) * v;
 
-
-        let viewport_upper_left = origin - config.focus_dist * w - (u * viewport_width * 0.5) - (v * viewport_height * 0.5);
+        let viewport_upper_left = origin
+            - config.focus_dist * w
+            - (u * viewport_width * 0.5)
+            - (v * viewport_height * 0.5);
         let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
-        let defocus_radius = config.focus_dist * (config.defocus_angle.to_radians()/2.0).tan();
+        let defocus_radius = config.focus_dist * (config.defocus_angle.to_radians() / 2.0).tan();
         let defocus_disk_u = u * defocus_radius;
         let defocus_disk_v = v * defocus_radius;
 
-        Self { origin, pixel00_loc, pixel_delta_u, pixel_delta_v, samples_per_pixel , width, height, config , defocus_disk_u, defocus_disk_v }
+        Self {
+            origin,
+            pixel00_loc,
+            pixel_delta_u,
+            pixel_delta_v,
+            samples_per_pixel,
+            width,
+            height,
+            config,
+            defocus_disk_u,
+            defocus_disk_v,
+        }
     }
 
-    pub fn default() -> Self {
-        let look_from = Point3::new(0.0, 0.0, 0.0);
-        let look_at = Point3::new(0.0, 0.0, -1.0);
-        let focus_dist = (look_at - look_from).length_squared();
-        let config = CameraConfig {
-            aspect_ratio: 16.0/9.0,
-            image_width: 1920,
-            fov: 90.0,
-            look_from: look_from,
-            look_at: look_at,
-            vup: Point3::new(0.0, 1.0, 0.0),
-            samples_per_pixel: 10,
-            defocus_angle: 0.0,
-            focus_dist: focus_dist
-        };
-        return Self::new(config)
-    }
-
-    /// Genera un rayo dirigido al píxel (x, y). 
+    /// Genera un rayo dirigido al píxel (x, y).
     /// Si `sample > 0`, aplica un desfase aleatorio sub-píxel (Antialiasing).
     pub fn get_ray(&self, x: u32, y: u32, sample: u32) -> Ray {
-        debug_assert!(x < self.width, "get_ray: x ({}) must be less than the camera width ({})", x, self.width);
-        debug_assert!(y < self.height, "get_ray: y ({}) must be less than the camera height ({})", y, self.height);
+        debug_assert!(
+            x < self.width,
+            "get_ray: x ({}) must be less than the camera width ({})",
+            x,
+            self.width
+        );
+        debug_assert!(
+            y < self.height,
+            "get_ray: y ({}) must be less than the camera height ({})",
+            y,
+            self.height
+        );
 
         let offset = if sample == 0 {
             Vec3::new(0.0, 0.0, 0.0)
@@ -93,20 +97,20 @@ impl Camera {
             self.sample_square()
         };
 
-        let  destination = self.pixel00_loc 
-            + (x as f32+offset.x) * self.pixel_delta_u 
+        let destination = self.pixel00_loc
+            + (x as f32 + offset.x) * self.pixel_delta_u
             + (y as f32 + offset.y) * self.pixel_delta_v;
 
         let origin = if self.config.defocus_angle <= 0.0 {
             self.origin
         } else {
             let lens_sample = self.sample_disk_in_unit_circle();
-            self.origin 
-                + (lens_sample.x * self.defocus_disk_u) 
+            self.origin
+                + (lens_sample.x * self.defocus_disk_u)
                 + (lens_sample.y * self.defocus_disk_v)
         };
 
-        let direction = (destination-origin).normalize();
+        let direction = (destination - origin).normalize();
 
         Ray { origin, direction }
     }
@@ -116,7 +120,6 @@ impl Camera {
         let rand_y = fastrand::f32() - 0.5;
 
         Vec3::new(rand_x, rand_y, 0.0)
-
     }
 
     fn sample_disk_in_unit_circle(&self) -> Vec3 {
@@ -133,5 +136,24 @@ impl Camera {
             }
         }
     }
+}
 
+impl Default for Camera {
+    fn default() -> Self {
+        let look_from = Point3::new(0.0, 0.0, 0.0);
+        let look_at = Point3::new(0.0, 0.0, -1.0);
+        let focus_dist = (look_at - look_from).length_squared();
+        let config = CameraConfig {
+            aspect_ratio: 16.0 / 9.0,
+            image_width: 1920,
+            fov: 90.0,
+            look_from,
+            look_at,
+            vup: Point3::new(0.0, 1.0, 0.0),
+            samples_per_pixel: 10,
+            defocus_angle: 0.0,
+            focus_dist,
+        };
+        Self::new(config)
+    }
 }

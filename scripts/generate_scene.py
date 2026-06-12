@@ -171,7 +171,7 @@ def main():
         "look_from": [16.0, 2.0, 3.0], # Posición alta y lateral alejada
         "look_at": [0.0, 0.0, 0.0],    # Apuntando al centro de la escena
         "vup": [0.0, 1.0, 0.0],
-        "samples_per_pixel": 1       # Sube a 500 para producción limpia sin grano
+        "samples_per_pixel": 250       # Sube a 500 para producción limpia sin grano
     }
 
     print(f"Total de objetos geométricos generados: {len(scene_payload['objects'])}")

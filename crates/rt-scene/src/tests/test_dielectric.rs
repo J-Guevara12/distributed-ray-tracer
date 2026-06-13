@@ -1,11 +1,20 @@
-use crate::{HitRecord, Material, materials::Dielectric};
+use crate::{HitRecord, Material, ScatterResult, materials::Dielectric};
 use glam::Vec3A;
 use rt_core::{Point3, Ray};
 
 #[derive(Debug)]
 struct MockMaterial;
 
-impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Vec3A, Ray)> { None } }
+impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord, _: &mut fastrand::Rng) -> Option<ScatterResult> { None } }
+
+
+/// Extrae (atenuación, rayo) de un rebote especular; falla si no lo es.
+fn unwrap_specular(result: ScatterResult) -> (rt_core::Color, Ray) {
+    match result {
+        ScatterResult::Specular { attenuation, scattered } => (attenuation, scattered),
+        other => panic!("Se esperaba un rebote especular, fue {:?}", other),
+    }
+}
 
 #[test]
 fn test_dielectric_perpendicular_incidence_does_not_bend() {
@@ -15,6 +24,9 @@ fn test_dielectric_perpendicular_incidence_does_not_bend() {
     let ray_in = Ray::new(Point3::new(0.0, 2.0, 0.0), Vec3A::new(0.0, -1.0, 0.0));
     let mock_mat = MockMaterial;
     let rec = HitRecord {
+        u: 0.0,
+        v: 0.0,
+        tangent: Vec3A::ZERO,
         p: Point3::ZERO,
         normal: Vec3A::Y, // Normal hacia arriba
         t: 2.0,
@@ -22,7 +34,7 @@ fn test_dielectric_perpendicular_incidence_does_not_bend() {
         material: &mock_mat,
     };
 
-    let (attenuation, ray_scattered) = vidrio.scatter(&ray_in, &rec).unwrap();
+    let (attenuation, ray_scattered) = unwrap_specular(vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::new()).unwrap());
 
     // 1. El vidrio transparente no debe teñir la luz (atenuación blanca pura)
     assert_eq!(attenuation, Vec3A::ONE);
@@ -43,6 +55,9 @@ fn test_dielectric_total_internal_reflection_edge_case() {
     let mock_mat = MockMaterial;
     
     let rec = HitRecord {
+        u: 0.0,
+        v: 0.0,
+        tangent: Vec3A::ZERO,
         p: Point3::ZERO,
         normal: Vec3A::Y, // La superficie está arriba de él
         t: 1.0,
@@ -50,7 +65,7 @@ fn test_dielectric_total_internal_reflection_edge_case() {
         material: &mock_mat,
     };
 
-    let (_, ray_scattered) = vidrio.scatter(&ray_in, &rec).unwrap();
+    let (_, ray_scattered) = unwrap_specular(vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::new()).unwrap());
 
     // Caso límite físico: En este ángulo, la Ley de Snell daría un seno de refracción > 1.0 (Imposible).
     // El motor debe forzar Reflexión Interna Total. El rayo debe rebotar hacia abajo (Y negativa).
@@ -71,6 +86,9 @@ fn test_schlick_approximation_reflectance_limits() {
     let ray_in = Ray::new(Point3::new(-50.0, 0.001, 0.0), Vec3A::new(1.0, -0.00001, 0.0).normalize());
     let mock_mat = MockMaterial;
     let rec = HitRecord {
+        u: 0.0,
+        v: 0.0,
+        tangent: Vec3A::ZERO,
         p: Point3::ZERO,
         normal: Vec3A::Y,
         t: 50.0,
@@ -84,7 +102,7 @@ fn test_schlick_approximation_reflectance_limits() {
     let iteraciones = 200;
     
     for _ in 0..iteraciones {
-        let (_, ray) = vidrio.scatter(&ray_in, &rec).unwrap();
+        let (_, ray) = unwrap_specular(vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::new()).unwrap());
         if ray.direction.y > 0.0 {
             reflejados += 1;
         }

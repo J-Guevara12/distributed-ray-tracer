@@ -1,0 +1,4 @@
+[build]
+# Aprovecha las instrucciones del CPU local (AVX2/FMA). Nota: el binario
+# resultante no es portable a CPUs más antiguas que la máquina de compilación.
+rustflags = ["-C", "target-cpu=native"]

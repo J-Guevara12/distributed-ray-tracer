@@ -1,5 +1,6 @@
 pub mod tiles;
 pub mod framebuffer;
+pub mod post;
 pub mod render;
 pub mod tracers;
 

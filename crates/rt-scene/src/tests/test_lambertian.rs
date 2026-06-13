@@ -6,7 +6,7 @@ use rt_core::{Point3, Ray, Vec3};
 struct MockMaterial;
 
 impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Vec3, Ray)> { None }
+    fn scatter(&self, _: &Ray, _: &HitRecord, _: &mut fastrand::Rng) -> Option<ScatterResult> { None }
 }
 
 #[test]
@@ -19,6 +19,9 @@ fn test_lambertian_attenuation_and_direction() {
     
     // Simulamos un impacto en el origen con una normal apuntando hacia +Y
     let rec = HitRecord {
+        u: 0.0,
+        v: 0.0,
+        tangent: Vec3::ZERO,
         p: Point3::ZERO,
         normal: Vec3::Y,
         t: 1.0,
@@ -26,13 +29,25 @@ fn test_lambertian_attenuation_and_direction() {
         material: &mock_mat,
     };
 
-    let result = mat.scatter(&ray_in, &rec);
-    
-    assert!(result.is_some(), "Lambertian siempre debería dispersar el rayo");
-    let (attenuation, ray_scattered) = result.unwrap();
+    let result = mat.scatter(&ray_in, &rec, &mut fastrand::Rng::new());
 
-    // 1. Validar conservación y fidelidad del color
-    assert_eq!(attenuation, albedo, "La atenuación debe ser igual al albedo");
+    assert!(result.is_some(), "Lambertian siempre debería dispersar el rayo");
+    let ray_scattered = match result.unwrap() {
+        ScatterResult::Diffuse { scattered } => scattered,
+        other => panic!("Lambertian debe ser un rebote difuso, fue {:?}", other),
+    };
+
+    // 1. Validar conservación y fidelidad del color: con muestreo coseno,
+    //    bsdf/pdf == albedo para la dirección muestreada
+    let pdf = mat.scattering_pdf(&ray_in, &rec, ray_scattered.direction);
+    let bsdf = mat.bsdf(&ray_in, &rec, ray_scattered.direction);
+    assert!(pdf > 0.0, "La pdf de la dirección muestreada debe ser positiva");
+
+    let attenuation = bsdf / pdf;
+    assert!(
+        (attenuation - albedo).abs().max_element() < 1e-5,
+        "bsdf/pdf debe igualar el albedo. Esperado {:?}, real {:?}", albedo, attenuation
+    );
 
     // 2. Validar origen del rayo secundario
     assert_eq!(ray_scattered.origin, rec.p, "El rayo dispersado debe nacer en el punto de impacto");
@@ -40,10 +55,10 @@ fn test_lambertian_attenuation_and_direction() {
     // 3. Edge Case: El rayo dispersado debe salir hacia el hemisferio exterior
     let dot_product = ray_scattered.direction.dot(rec.normal);
     assert!(
-        dot_product > 0.0, 
+        dot_product > 0.0,
         "El rayo difuso se dispersó hacia adentro de la superficie (dot = {})", dot_product
     );
-    
+
     // 4. Asegurar que la dirección no sea un vector roto (NaN o infinito)
     assert!(ray_scattered.direction.is_finite(), "La dirección del rayo no es finita");
 }

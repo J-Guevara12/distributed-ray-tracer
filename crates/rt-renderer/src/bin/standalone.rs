@@ -1,8 +1,8 @@
 use std::{fs::File, sync::Arc, time::Instant};
 
 use rt_core::dto::ScenePayload;
-use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tracers::PathTracer};
-use rt_scene::hittable_list::HittableList;
+use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, post::PostProcess, render::render_scene, tracers::PathTracer};
+use rt_scene::Bvh;
 use tokio::sync::broadcast;
 
 pub fn main() {
@@ -16,15 +16,16 @@ pub fn main() {
     let file_camera = File::open(path_camera).expect("Error abriendo el archivo de la cámara");
     let camera_config: CameraConfig = serde_json::from_reader(file_camera).unwrap();
 
-    let world = HittableList::from(&scene_payload);
+    let world = Bvh::from(&scene_payload);
     let camera = Camera::new(camera_config);
 
     let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height, 3));
     let (tx_stream, _) = broadcast::channel(100);
 
     let ray_tracer = PathTracer::new(15);
+    let post = PostProcess::default();
     let instant = Instant::now();
-    render_scene(Arc::new(camera), Arc::new(ray_tracer), Arc::clone(&framebuffer), tx_stream, 128, 3, &world);
+    render_scene(Arc::new(camera), Arc::new(ray_tracer), Arc::clone(&framebuffer), tx_stream, 64, 3, post, &world);
     println!("Procesado en {} ms", instant.elapsed().as_millis());
-    framebuffer.save_png("result.png").unwrap();
+    framebuffer.save_png("result.png", &post).unwrap();
 }

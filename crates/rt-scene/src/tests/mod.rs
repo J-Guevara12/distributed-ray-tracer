@@ -1,4 +1,5 @@
 // --- Core
+mod test_bvh;
 mod test_hittable_list;
 
 // --- Geometries

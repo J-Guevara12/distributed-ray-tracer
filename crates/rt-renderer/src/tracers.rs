@@ -1,16 +1,16 @@
 use rt_core::{Color, Interval, Ray};
-use rt_scene::{Hittable};
+use rt_scene::{Hittable, ScatterResult};
 
 
 pub trait RayTracer: Send + Sync + 'static {
-    fn trace_ray(&self, ray: Ray, world: &dyn Hittable) -> Color;
+    fn trace_ray(&self, ray: Ray, world: &dyn Hittable, rng: &mut fastrand::Rng) -> Color;
 }
 
 pub struct NormalTracer {
 }
 
 impl RayTracer for NormalTracer {
-    fn trace_ray(&self, ray: Ray,  world: &dyn Hittable) -> Color {
+    fn trace_ray(&self, ray: Ray,  world: &dyn Hittable, _rng: &mut fastrand::Rng) -> Color {
         let interval = Interval::new(0.0, f32::INFINITY);
 
         if let Some(rec) = world.hit(&ray, interval) {
@@ -46,33 +46,46 @@ impl PathTracer {
 }
 
 impl RayTracer for PathTracer {
-    fn trace_ray(&self, ray: Ray,  world: &dyn Hittable) -> Color {
+    fn trace_ray(&self, ray: Ray,  world: &dyn Hittable, rng: &mut fastrand::Rng) -> Color {
         let mut current_ray = ray;
 
-        let mut attenuation = Color::ONE;
+        let mut radiance = Color::ZERO;
+        let mut throughput = Color::ONE;
 
         for _ in 0..self.max_depth {
             let interval = Interval::new(0.001, f32::INFINITY);
 
-            if let Some(rec) = world.hit(&current_ray, interval) {
-                if let Some((attenuation_material, scattered_ray)) = rec.material.scatter(&current_ray, &rec){
-                    attenuation *= attenuation_material;
-                    current_ray = scattered_ray;
-                }
-                else {
-                    return Color::ZERO;
-                }
-
-            } else {
+            let Some(rec) = world.hit(&current_ray, interval) else {
                 let unit_direction = current_ray.direction;
 
                 let t = 0.5 * (unit_direction.y + 1.0);
                 let sky = Color::ONE * (1.0 - t) + Color::new(0.5, 0.7, 1.0) * t;
 
-                return attenuation * sky;
+                return radiance + throughput * sky;
+            };
+
+            // Emisión de la superficie (luces)
+            radiance += throughput * rec.material.emitted(&rec);
+
+            match rec.material.scatter(&current_ray, &rec, rng) {
+                None => return radiance, // Absorción total (o material puramente emisivo)
+                Some(ScatterResult::Specular { attenuation, scattered }) => {
+                    throughput *= attenuation;
+                    current_ray = scattered;
+                }
+                Some(ScatterResult::Diffuse { scattered }) => {
+                    let pdf = rec.material.scattering_pdf(&current_ray, &rec, scattered.direction);
+
+                    if pdf <= 0.0 {
+                        return radiance;
+                    }
+
+                    throughput *= rec.material.bsdf(&current_ray, &rec, scattered.direction) / pdf;
+                    current_ray = scattered;
+                }
             }
         }
-        Color::ZERO
+        radiance
     }
 }
 

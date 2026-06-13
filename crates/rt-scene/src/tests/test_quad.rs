@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use rt_core::{Color, Point3, Ray, Vec3};
 
-use crate::{HitRecord, Hittable, Interval, Material, geometry::Quad};
+use crate::{HitRecord, Hittable, Interval, Material, ScatterResult, geometry::Quad};
 
 // 1. Creamos un Material Dummy para las pruebas que no requiera lógica compleja
 #[derive(Debug)]
 struct MockMaterial;
 impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Color, Ray)> {
+    fn scatter(&self, _: &Ray, _: &HitRecord, _: &mut fastrand::Rng) -> Option<ScatterResult> {
         None
     }
 }
@@ -30,6 +30,7 @@ fn test_quad_hit_exact_center() {
     let quad = setup_test_quad();
     // Rayo en el origen apuntando al centro exacto del cuadrado (0.0, 0.0, -2.0)
     let ray = Ray {
+        time: 0.0,
         origin: Point3::new(0.0, 0.0, 0.0),
         direction: Vec3::new(0.0, 0.0, -1.0),
     };
@@ -54,6 +55,7 @@ fn test_quad_miss_outside_bounds() {
     let quad = setup_test_quad();
     // El rayo apunta a Z = -2.0 pero se pasa de largo por la derecha (X = 1.5, fuera del rango [-1, 1])
     let ray = Ray {
+        time: 0.0,
         origin: Point3::new(1.5, 0.0, 0.0),
         direction: Vec3::new(0.0, 0.0, -1.0),
     };
@@ -73,6 +75,7 @@ fn test_quad_hit_edges_and_corners() {
 
     // Impacto directo en la esquina origen 'q' (-1.0, -1.0, -2.0)
     let ray_q = Ray {
+        time: 0.0,
         origin: Point3::new(-1.0, -1.0, 0.0),
         direction: Vec3::new(0.0, 0.0, -1.0),
     };
@@ -83,6 +86,7 @@ fn test_quad_hit_edges_and_corners() {
 
     // Impacto en la esquina opuesta diagonal (q + u + v) -> (1.0, 1.0, -2.0)
     let ray_opposite = Ray {
+        time: 0.0,
         origin: Point3::new(1.0, 1.0, 0.0),
         direction: Vec3::new(0.0, 0.0, -1.0),
     };
@@ -97,6 +101,7 @@ fn test_quad_miss_parallel_ray() {
     let quad = setup_test_quad();
     // Un rayo que viaja de izquierda a derecha a través del eje X. Es paralelo al plano del Quad.
     let ray = Ray {
+        time: 0.0,
         origin: Point3::new(-5.0, 0.0, -2.0),
         direction: Vec3::new(1.0, 0.0, 0.0),
     };
@@ -114,6 +119,7 @@ fn test_quad_miss_behind_ray() {
     let quad = setup_test_quad();
     // El rayo apunta hacia Z positivo (atrás), dándole la espalda al objeto
     let ray = Ray {
+        time: 0.0,
         origin: Point3::new(0.0, 0.0, 0.0),
         direction: Vec3::new(0.0, 0.0, 1.0),
     };
@@ -130,6 +136,7 @@ fn test_quad_miss_behind_ray() {
 fn test_quad_out_of_interval_range() {
     let quad = setup_test_quad();
     let ray = Ray {
+        time: 0.0,
         origin: Point3::new(0.0, 0.0, 0.0),
         direction: Vec3::new(0.0, 0.0, -1.0),
     };

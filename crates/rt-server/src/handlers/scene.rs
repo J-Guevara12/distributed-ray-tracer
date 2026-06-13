@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{Json, extract::State, http::StatusCode};
 use rt_core::dto::ScenePayload;
-use rt_scene::{Hittable, hittable_list::HittableList};
+use rt_scene::{Bvh, Hittable};
 
 use crate::state::AppState;
 
@@ -22,8 +22,7 @@ pub async fn post_scene_handler(
     Json(payload): Json<ScenePayload>,
 ) -> Result<StatusCode, StatusCode> {
 
-    let world = HittableList::from(&payload);
-    let world_arc: Arc<dyn Hittable + Send + Sync> = Arc::new(world);
+    let world_arc: Arc<dyn Hittable + Send + Sync> = Arc::new(Bvh::from(&payload));
 
     let mut world_lock = state.world.write().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut data_lock = state.scene_data.write().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

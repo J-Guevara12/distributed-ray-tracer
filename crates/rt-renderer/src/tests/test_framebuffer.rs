@@ -1,16 +1,25 @@
 use crate::framebuffer::FrameBuffer;
-use crate::tiles::{Tile, TileResult};
+use crate::post::{PostProcess, ToneMap};
+use crate::tiles::Tile;
 use std::sync::Arc;
 use std::thread;
+
+/// Post-procesado neutro: clamp + exposición 1.0 (1.0 lineal -> 255).
+fn neutral_post() -> PostProcess {
+    PostProcess {
+        tone_map: ToneMap::Clamp,
+        exposure: 1.0,
+    }
+}
 
 #[test]
 fn test_framebuffer_write_and_snapshot() {
     // 1. Inicializamos un FrameBuffer pequeño de 4x4 píxeles con un stride de 3 (RGB)
     let stride = 3;
     let fb = FrameBuffer::new(4, 4, stride);
-    
-    // 2. Simulamos un TileResult de 2x2 que se ubica en la esquina superior izquierda (0,0)
-    let original_tile = Tile {
+
+    // 2. Simulamos un tile de 2x2 que se ubica en la esquina superior izquierda (0,0)
+    let tile = Tile {
         id: 0,
         x: 0,
         y: 0,
@@ -18,21 +27,17 @@ fn test_framebuffer_write_and_snapshot() {
         height: 2,
     };
 
-    let tile_result = TileResult {
-        tile_id: 0,
-        original_tile,
-        // Matriz de píxeles local del tile (2x2 píxeles * 3 bytes = 12 bytes)
-        pixels: vec![
-            255, 0, 0,  255, 0, 0, // Fila local 0: 2 píxeles rojos
-            0, 255, 0,  0, 255, 0, // Fila local 1: 2 píxeles verdes
-        ],
-    };
+    // Radiancia local del tile (2x2 píxeles * 3 canales)
+    let radiance = vec![
+        1.0, 0.0, 0.0, 1.0, 0.0, 0.0, // Fila local 0: 2 píxeles rojos
+        0.0, 1.0, 0.0, 0.0, 1.0, 0.0, // Fila local 1: 2 píxeles verdes
+    ];
 
-    // 3. Escribimos el tile usando la nueva firma matemática
-    fb.write_tile(&tile_result, stride);
-    
-    let snapshot = fb.get_snapshot();
-    
+    // 3. Escribimos el tile
+    fb.write_tile_radiance(&tile, &radiance);
+
+    let snapshot = fb.get_snapshot(&neutral_post());
+
     // --- ASERCIONES ---
 
     // Fila Global 0, Píxel 0 (Coordenada 0,0) -> Debe ser Rojo (255, 0, 0)
@@ -69,9 +74,9 @@ fn test_framebuffer_write_offset_block() {
     // Valida que el mapeo funcione cuando el tile no inicia en (0,0)
     let stride = 3;
     let fb = FrameBuffer::new(4, 4, stride);
-    
+
     // Un tile de 2x2 desplazado a la esquina inferior derecha (inicia en X=2, Y=2)
-    let original_tile = Tile {
+    let tile = Tile {
         id: 1,
         x: 2,
         y: 2,
@@ -79,17 +84,13 @@ fn test_framebuffer_write_offset_block() {
         height: 2,
     };
 
-    let tile_result = TileResult {
-        tile_id: 1,
-        original_tile,
-        pixels: vec![
-            0, 0, 255,  0, 0, 255, // Fila local 0: 2 píxeles azules
-            0, 0, 255,  0, 0, 255, // Fila local 1: 2 píxeles azules
-        ],
-    };
+    let radiance = vec![
+        0.0, 0.0, 1.0, 0.0, 0.0, 1.0, // Fila local 0: 2 píxeles azules
+        0.0, 0.0, 1.0, 0.0, 0.0, 1.0, // Fila local 1: 2 píxeles azules
+    ];
 
-    fb.write_tile(&tile_result, stride);
-    let snapshot = fb.get_snapshot();
+    fb.write_tile_radiance(&tile, &radiance);
+    let snapshot = fb.get_snapshot(&neutral_post());
 
     // El primer píxel del buffer global (0,0) debe seguir intacto (negro)
     assert_eq!(snapshot[0], 0);
@@ -102,19 +103,43 @@ fn test_framebuffer_write_offset_block() {
 }
 
 #[test]
+fn test_framebuffer_hdr_radiance_preserved() {
+    // La radiancia > 1.0 debe conservarse en el buffer lineal aunque
+    // el snapshot de 8 bits la recorte.
+    let fb = FrameBuffer::new(1, 1, 3);
+
+    let tile = Tile {
+        id: 0,
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+    };
+    fb.write_tile_radiance(&tile, &[5.0, 1.0, 0.25]);
+
+    let raw = fb.get_radiance_snapshot();
+    assert_eq!(&raw[..3], &[5.0, 1.0, 0.25]);
+
+    // Con clamp, el canal HDR satura en 255
+    let snapshot = fb.get_snapshot(&neutral_post());
+    assert_eq!(snapshot[0], 255);
+    assert_eq!(snapshot[1], 255);
+}
+
+#[test]
 fn test_concurrent_framebuffer_writes() {
     let stride = 3;
     let width = 100;
     let height = 100;
     let framebuffer = Arc::new(FrameBuffer::new(width, height, stride));
-    
+
     let mut handles = vec![];
 
     // Lanzamos 4 hilos simulando workers concurrentes escribiendo bloques independientes
     for id in 0..4 {
         let fb_clone = Arc::clone(&framebuffer);
         let handle = thread::spawn(move || {
-            let original_tile = Tile {
+            let tile = Tile {
                 id,
                 x: (id * 2) as u32,
                 y: 0,
@@ -122,13 +147,9 @@ fn test_concurrent_framebuffer_writes() {
                 height: 2,
             };
 
-            let result = TileResult {
-                tile_id: id,
-                original_tile,
-                // Llenamos el bloque con el ID del hilo para asegurar que no se pisen de forma corrupta
-                pixels: vec![id as u8; 2 * 2 * stride], 
-            };
-            fb_clone.write_tile(&result, stride);
+            // Llenamos el bloque con el ID del hilo para asegurar que no se pisen de forma corrupta
+            let radiance = vec![id as f32; 2 * 2 * stride];
+            fb_clone.write_tile_radiance(&tile, &radiance);
         });
         handles.push(handle);
     }
@@ -137,7 +158,7 @@ fn test_concurrent_framebuffer_writes() {
         handle.join().unwrap();
     }
 
-    let snapshot = framebuffer.get_snapshot();
+    let snapshot = framebuffer.get_snapshot(&neutral_post());
     // Validar invariante de memoria del buffer completo
-    assert_eq!(snapshot.len(), (width * height ) as usize * stride);
+    assert_eq!(snapshot.len(), (width * height) as usize * stride);
 }

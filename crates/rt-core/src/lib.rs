@@ -13,12 +13,19 @@ pub type Point3 = Vec3A;
 #[derive(Debug, Clone, Copy)]
 pub struct Ray {
     pub origin: Point3,
-    pub direction: Vec3
+    pub direction: Vec3,
+    /// Instante del obturador en [0, 1) en que se disparó el rayo (motion blur).
+    pub time: f32,
 }
 
 impl Ray {
     pub fn new(origin: Point3, direction: Vec3) -> Self {
-        Self {origin, direction: direction.normalize()}
+        Self {origin, direction: direction.normalize(), time: 0.0}
+    }
+
+    /// Rayo secundario que hereda el instante del rayo que lo originó.
+    pub fn new_at_time(origin: Point3, direction: Vec3, time: f32) -> Self {
+        Self {origin, direction: direction.normalize(), time}
     }
 
     pub fn at(&self, t: f32) -> Point3 {

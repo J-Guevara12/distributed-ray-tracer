@@ -9,7 +9,8 @@ use crate::state::AppState;
 pub async fn render_stream_handler(State(state): State<AppState>) -> Sse<impl Stream<Item = Result<Event, Infallible>>>{
     let rx = state.tx_stream.subscribe();
 
-    let current_snapshot = state.framebuffer.get_snapshot();
+    let post = *state.post.read().unwrap();
+    let current_snapshot = state.framebuffer.get_snapshot(&post);
     let width = state.framebuffer.width;
     let height = state.framebuffer.height;
 

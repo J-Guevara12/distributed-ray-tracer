@@ -1,13 +1,9 @@
-use rt_core::dto::{MaterialDTO, ObjectDTO, ScenePayload};
+use rt_core::dto::ScenePayload;
 
-use crate::{
-    geometry::{Quad, Sphere},
-    materials::{Dielectric, Lambertian, Metal},
-    *,
-};
+use crate::{geometry::primitives_from_scene, *};
 
 use crate::Hittable;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct HittableList {
@@ -46,49 +42,20 @@ impl Hittable for HittableList {
 
         hit_anything
     }
+
+    fn bounding_box(&self) -> Aabb {
+        self.objects
+            .iter()
+            .fold(Aabb::EMPTY, |acc, obj| acc.union(obj.bounding_box()))
+    }
 }
 
 impl From<&ScenePayload> for HittableList {
     fn from(value: &ScenePayload) -> Self {
         let mut mundo = HittableList::new();
-        let mut materials = HashMap::new();
 
-        for (id, mat_dto) in &value.materials {
-            let material: Arc<dyn Material> = match mat_dto {
-                MaterialDTO::Lambertian { albedo } => Arc::new(Lambertian::new(*albedo)),
-                MaterialDTO::Metal { albedo, fuzz } => Arc::new(Metal::new(*albedo, *fuzz)),
-                MaterialDTO::Direlectric { refraction_index } => {
-                    Arc::new(Dielectric::new(*refraction_index))
-                }
-            };
-            materials.insert(id.clone(), material);
-        }
-        for obj in &value.objects {
-            match obj {
-                ObjectDTO::Sphere {
-                    center,
-                    radius,
-                    material,
-                } => {
-                    if let Some(mat) = materials.get(material) {
-                        let sphere = Sphere::new(*center, *radius, Arc::clone(mat));
-
-                        mundo.add(Arc::new(sphere));
-                    } else {
-                        eprintln!(
-                            "Warning: El material '{}' no fue encontrado para la esfera.",
-                            material
-                        );
-                    }
-                }
-                ObjectDTO::Quad { q, u, v, material } => {
-                    if let Some(mat) = materials.get(material) {
-                        let quad = Quad::new(*q, *u, *v, Arc::clone(mat));
-
-                        mundo.add(Arc::new(quad));
-                    }
-                }
-            }
+        for primitive in primitives_from_scene(value) {
+            mundo.add(Arc::new(primitive));
         }
 
         mundo

@@ -1,5 +1,6 @@
 use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
+use crate::post::{PostProcess, ToneMap};
 use crate::render::render_scene;
 use crate::tracers::RayTracer;
 use rt_core::{Color, Point3, Ray, Vec3};
@@ -15,7 +16,7 @@ struct MockRayTracer {
 }
 
 impl RayTracer for MockRayTracer {
-    fn trace_ray(&self, _ray: Ray, _world: &dyn Hittable) -> Color {
+    fn trace_ray(&self, _ray: Ray, _world: &dyn Hittable, _rng: &mut fastrand::Rng) -> Color {
         // No importa la dirección del rayo, siempre devolvemos el mismo color
         self.fixed_color
     }
@@ -54,6 +55,12 @@ fn test_render_scene_integration() {
     let (tx_stream, mut rx_stream) = broadcast::channel(10);
     let world = Arc::new(HittableList::new());
 
+    // Post-procesado neutro para validar bytes exactos (verde 1.0 -> 255)
+    let post = PostProcess {
+        tone_map: ToneMap::Clamp,
+        exposure: 1.0,
+    };
+
     // 3. EJECUCIÓN: Corremos el orquestador de la escena
     render_scene(
         camera,
@@ -62,6 +69,7 @@ fn test_render_scene_integration() {
         tx_stream,
         tile_size,
         stride,
+        post,
         world.as_ref(),
     );
 
@@ -98,7 +106,7 @@ fn test_render_scene_integration() {
 
     // 5. ASERCIÓN 2: Validar el estado final del FrameBuffer
     // Tomamos una captura de memoria del buffer completo
-    let snapshot = framebuffer.get_snapshot();
+    let snapshot = framebuffer.get_snapshot(&post);
     let expected_total_bytes = (width * height) as usize * stride; // 4 * 4 * 3 = 48 bytes
     assert_eq!(snapshot.len(), expected_total_bytes);
 

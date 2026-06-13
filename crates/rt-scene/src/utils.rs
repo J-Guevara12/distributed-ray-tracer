@@ -1,11 +1,11 @@
 use rt_core::{Vec3, Color};
 
-pub fn random_unit_vector() -> Vec3 {
+pub fn random_unit_vector(rng: &mut fastrand::Rng) -> Vec3 {
     loop {
         let p = Vec3::new(
-            fastrand::f32() * 2.0 - 1.0,
-            fastrand::f32() * 2.0 - 1.0,
-            fastrand::f32() * 2.0 - 1.0,
+            rng.f32() * 2.0 - 1.0,
+            rng.f32() * 2.0 - 1.0,
+            rng.f32() * 2.0 - 1.0,
         );
         
         let len_sq = p.length_squared();
@@ -15,6 +15,19 @@ pub fn random_unit_vector() -> Vec3 {
         }
     }
 }
+/// Construye (tangente, bitangente) ortonormales a una normal unitaria
+/// (método de Duff et al., "Building an Orthonormal Basis, Revisited").
+pub fn orthonormal_basis(n: Vec3) -> (Vec3, Vec3) {
+    let sign = 1.0f32.copysign(n.z);
+    let a = -1.0 / (sign + n.z);
+    let b = n.x * n.y * a;
+
+    let tangent = Vec3::new(1.0 + sign * n.x * n.x * a, sign * b, -sign * n.x);
+    let bitangent = Vec3::new(b, sign + n.y * n.y * a, -n.y);
+
+    (tangent, bitangent)
+}
+
 pub fn is_near_zero(v: &Color) -> bool {
     let s = 1e-8;
     v.x.abs() < s && v.y.abs() < s && v.z.abs() < s

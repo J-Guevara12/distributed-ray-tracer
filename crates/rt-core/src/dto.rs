@@ -29,6 +29,13 @@ pub enum ObjectDTO {
         radius: f32,
         material: String,
     },
+    #[serde(rename = "quad")]
+    Quad {
+        q: Point3,
+        u: Point3,
+        v: Point3,
+        material: String,
+    },
 }
 
 impl ScenePayload {
@@ -70,9 +77,10 @@ impl Default for ScenePayload {
         materials.insert("up_in".to_string(), material_up_in);
 
         let objects = vec![
-            ObjectDTO::Sphere {
-                center: Point3::new(0.0, -100.5, -1.0),
-                radius: 100.0,
+            ObjectDTO::Quad {
+                q: Point3::new(-1.0, -1.0, -1.0),
+                u: Vec3::new(2.0, 0.0, 0.0),
+                v: Vec3::new(0.0, 0.0, 2.0),
                 material: "ground".to_string(),
             },
             ObjectDTO::Sphere {

@@ -14,6 +14,7 @@ pub struct Quad {
     pub u: Vec3,
     pub v: Vec3,
     pub n: Vec3,
+    pub w: Vec3,
     pub d: f32,
 }
 
@@ -66,13 +67,16 @@ impl Hittable for Sphere {
 
 impl Quad {
     pub fn new(q: Point3, u: Vec3, v: Vec3, material: Arc<dyn Material>) -> Self {
-        let n = u.cross(v).normalize();
+        let w = u.cross(v);
+        let n = w.normalize();
         let d = n.dot(q);
+        let w = w / (w.dot(w));
         Self {
             q,
             u,
             v,
             n,
+            w,
             d,
             material,
         }
@@ -95,14 +99,14 @@ impl Hittable for Quad {
 
         let t = (self.d - self.n.dot(ray.origin)) / denom;
 
-        if ray_t.contains(t) {
+        if !ray_t.contains(t) {
             return None;
         }
 
         let intersection = ray.at(t);
         let planar_vector = intersection - self.q;
-        let alpha = self.n.dot(planar_vector.cross(self.u));
-        let betha = self.n.dot(self.v.cross(planar_vector));
+        let alpha = self.w.dot(planar_vector.cross(self.v));
+        let betha = self.w.dot(self.u.cross(planar_vector));
 
         if !Quad::is_interior(alpha, betha) {
             return None;

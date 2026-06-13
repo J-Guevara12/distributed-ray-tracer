@@ -1,18 +1,24 @@
 use rt_core::dto::{MaterialDTO, ObjectDTO, ScenePayload};
 
-use crate::{geometry::Sphere, materials::{Dielectric, Lambertian, Metal}, *};
+use crate::{
+    geometry::{Quad, Sphere},
+    materials::{Dielectric, Lambertian, Metal},
+    *,
+};
 
-use std::{collections::HashMap, sync::Arc};
 use crate::Hittable;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Default)]
 pub struct HittableList {
-    pub objects: Vec<Arc<dyn Hittable>>
+    pub objects: Vec<Arc<dyn Hittable>>,
 }
 
 impl HittableList {
     pub fn new() -> Self {
-        Self { objects: Vec::new() }
+        Self {
+            objects: Vec::new(),
+        }
     }
 
     pub fn clear(&mut self) {
@@ -49,33 +55,41 @@ impl From<&ScenePayload> for HittableList {
 
         for (id, mat_dto) in &value.materials {
             let material: Arc<dyn Material> = match mat_dto {
-                MaterialDTO::Lambertian { albedo } => {
-                    Arc::new(Lambertian::new(*albedo))
-                }
-                MaterialDTO::Metal { albedo, fuzz } => {
-                    Arc::new(Metal::new(*albedo, *fuzz))
-                }
+                MaterialDTO::Lambertian { albedo } => Arc::new(Lambertian::new(*albedo)),
+                MaterialDTO::Metal { albedo, fuzz } => Arc::new(Metal::new(*albedo, *fuzz)),
                 MaterialDTO::Direlectric { refraction_index } => {
                     Arc::new(Dielectric::new(*refraction_index))
                 }
-                
             };
             materials.insert(id.clone(), material);
         }
         for obj in &value.objects {
             match obj {
-                ObjectDTO::Sphere { center, radius, material } => {
+                ObjectDTO::Sphere {
+                    center,
+                    radius,
+                    material,
+                } => {
                     if let Some(mat) = materials.get(material) {
                         let sphere = Sphere::new(*center, *radius, Arc::clone(mat));
 
                         mundo.add(Arc::new(sphere));
                     } else {
-                        eprintln!("Warning: El material '{}' no fue encontrado para la esfera.", material);
+                        eprintln!(
+                            "Warning: El material '{}' no fue encontrado para la esfera.",
+                            material
+                        );
                     }
-                },
+                }
+                ObjectDTO::Quad { q, u, v, material } => {
+                    if let Some(mat) = materials.get(material) {
+                        let quad = Quad::new(*q, *u, *v, Arc::clone(mat));
+
+                        mundo.add(Arc::new(quad));
+                    }
+                }
             }
         }
-
 
         mundo
     }

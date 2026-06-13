@@ -1,0 +1,29 @@
+@baseUrl = http://127.0.1.1:3000
+
+# render
+PUT {{baseUrl}}/camera
+Content-Type: application/json
+
+{
+  "aspect_ratio": 1.7777778,
+  "image_width": 1920,
+  "fov": 90,
+  "look_from": [
+    0,
+    0,
+    9
+  ],
+  "look_at": [
+    0,
+    0,
+    0
+  ],
+  "vup": [
+    0,
+    1,
+    0
+  ],
+  "samples_per_pixel": 10,
+  "defocus_angle": 0,
+  "focus_dist": 1
+}

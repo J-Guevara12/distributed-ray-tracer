@@ -109,7 +109,7 @@ impl DiffuseLight {
 }
 
 impl Material for DiffuseLight {
-    fn scatter(&self, ray_in: &Ray, rec: &crate::HitRecord) -> Option<(Vec3, Ray)> {
+    fn scatter(&self, _ray_in: &Ray, _rec: &crate::HitRecord) -> Option<(Vec3, Ray)> {
         None
     }
 

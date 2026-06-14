@@ -47,27 +47,30 @@ impl RayTracer for PathTracer {
 
         let mut attenuation = Color::ONE;
 
+        let mut accumulated_light = Color::ZERO;
+
         for _ in 0..self.max_depth {
             let interval = Interval::new(0.001, f32::INFINITY);
 
             if let Some(rec) = world.hit(&current_ray, interval) {
+                let emitted = rec.material.emitted(rec.normal[0], rec.normal[0], rec.p);
+                accumulated_light = attenuation * emitted;
+
                 if let Some((attenuation_material, scattered_ray)) =
                     rec.material.scatter(&current_ray, &rec)
                 {
                     attenuation *= attenuation_material;
                     current_ray = scattered_ray;
                 } else {
-                    return Color::ZERO;
+                    return accumulated_light;
                 }
             } else {
-                let unit_direction = current_ray.direction;
-
-                let t = 0.5 * (unit_direction.y + 1.0);
-                let sky = Color::ONE * (1.0 - t) + Color::new(0.5, 0.7, 1.0) * t;
+                let sky = Color::new(0.0, 0.0, 0.0);
+                accumulated_light += attenuation * sky;
 
                 return attenuation * sky;
             }
         }
-        Color::ZERO
+        accumulated_light
     }
 }

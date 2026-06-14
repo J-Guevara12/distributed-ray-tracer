@@ -2,7 +2,7 @@ use rt_core::dto::{MaterialDTO, ObjectDTO, ScenePayload};
 
 use crate::{
     geometry::{PlanarShape, Sphere},
-    materials::{Dielectric, Lambertian, Metal},
+    materials::{Dielectric, DiffuseLight, Lambertian, Metal},
     *,
 };
 
@@ -60,6 +60,7 @@ impl From<&ScenePayload> for HittableList {
                 MaterialDTO::Direlectric { refraction_index } => {
                     Arc::new(Dielectric::new(*refraction_index))
                 }
+                MaterialDTO::DiffuseLight { emit } => Arc::new(DiffuseLight::new(*emit)),
             };
             materials.insert(id.clone(), material);
         }

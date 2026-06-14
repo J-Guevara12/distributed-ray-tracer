@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{Point3, Vec3};
+use crate::{Color, Point3, Vec3};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScenePayload {
@@ -18,6 +18,8 @@ pub enum MaterialDTO {
     Metal { albedo: Vec3, fuzz: f32 },
     #[serde(rename = "dielectric")]
     Direlectric { refraction_index: f32 },
+    #[serde(rename = "diffuse_light")]
+    DiffuseLight { emit: Color },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

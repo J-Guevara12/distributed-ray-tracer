@@ -10,12 +10,16 @@ pub struct Lambertian {
 
 impl Lambertian {
     pub fn new(albedo: Color) -> Self {
-        Self{ albedo }
+        Self { albedo }
     }
 }
 
 impl Material for Lambertian {
-    fn scatter(&self, _ray_in: &rt_core::Ray, rec: &crate::HitRecord) -> Option<(rt_core::Vec3, rt_core::Ray)> {
+    fn scatter(
+        &self,
+        _ray_in: &rt_core::Ray,
+        rec: &crate::HitRecord,
+    ) -> Option<(rt_core::Vec3, rt_core::Ray)> {
         let mut scatter_direction = rec.normal + random_unit_vector();
 
         if is_near_zero(&scatter_direction) {
@@ -31,12 +35,12 @@ impl Material for Lambertian {
 #[derive(Debug)]
 pub struct Metal {
     pub albedo: Color,
-    pub fuzz: f32
+    pub fuzz: f32,
 }
 
 impl Metal {
     pub fn new(albedo: Color, fuzz: f32) -> Self {
-        Self{ albedo, fuzz }
+        Self { albedo, fuzz }
     }
 }
 
@@ -71,16 +75,16 @@ impl Material for Dielectric {
         let attenuation = Color::ONE;
 
         let ri = if rec.front_face {
-            1.0/ &self.refraction_index
+            1.0 / &self.refraction_index
         } else {
             self.refraction_index
         };
 
         let cos_theta = (-ray_in.direction).dot(rec.normal).min(1.0);
-        let sin_theta = (1.0- cos_theta * cos_theta).sqrt();
+        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
 
         let cannot_refract = ri * sin_theta > 1.0;
-        
+
         let scatter_direction = if cannot_refract || reflectance(cos_theta, ri) > fastrand::f32() {
             // Caso A: Reflexión interna total o probabilidad alta según Schlick -> El rayo rebota como espejo
             reflect(ray_in.direction, rec.normal)
@@ -90,5 +94,26 @@ impl Material for Dielectric {
         };
 
         Some((attenuation, Ray::new(rec.p, scatter_direction)))
+    }
+}
+
+#[derive(Debug)]
+pub struct DiffuseLight {
+    emit: Color,
+}
+
+impl DiffuseLight {
+    pub fn new(emit: Color) -> Self {
+        Self { emit }
+    }
+}
+
+impl Material for DiffuseLight {
+    fn scatter(&self, ray_in: &Ray, rec: &crate::HitRecord) -> Option<(Vec3, Ray)> {
+        None
+    }
+
+    fn emitted(&self, _u: f32, _v: f32, _p: rt_core::Point3) -> Color {
+        self.emit
     }
 }

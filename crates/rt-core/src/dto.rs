@@ -36,6 +36,20 @@ pub enum ObjectDTO {
         v: Point3,
         material: String,
     },
+    #[serde(rename = "triangle")]
+    Triangle {
+        q: Point3,
+        u: Point3,
+        v: Point3,
+        material: String,
+    },
+    #[serde(rename = "elipse")]
+    Elipse {
+        q: Point3,
+        u: Point3,
+        v: Point3,
+        material: String,
+    },
 }
 
 impl ScenePayload {
@@ -78,9 +92,9 @@ impl Default for ScenePayload {
 
         let objects = vec![
             ObjectDTO::Quad {
-                q: Point3::new(-1.0, -1.0, -1.0),
-                u: Vec3::new(2.0, 0.0, 0.0),
-                v: Vec3::new(0.0, 0.0, 2.0),
+                q: Point3::new(-100.0, -1.0, -100.0),
+                u: Vec3::new(200.0, 0.0, 0.0),
+                v: Vec3::new(0.0, 0.0, 200.0),
                 material: "ground".to_string(),
             },
             ObjectDTO::Sphere {

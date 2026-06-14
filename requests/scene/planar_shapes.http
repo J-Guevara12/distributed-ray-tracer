@@ -1,0 +1,68 @@
+@baseUrl = http://127.0.1.1:3000
+
+# render
+POST {{baseUrl}}/scene
+Content-Type: application/json
+
+{
+  "materials": {
+    "left_red": {
+      "type": "lambertian",
+      "albedo": [1.0, 0.2, 0.2]
+    },
+    "back_green": {
+      "type": "lambertian",
+      "albedo": [0.2, 1.0, 0.2]
+    },
+    "right_blue": {
+      "type": "lambertian",
+      "albedo": [0.2, 0.2, 1.0]
+    },
+    "upper_orange": {
+      "type": "metal",
+      "fuzz": 0.1,
+      "albedo": [1.0, 0.2, 0.2]
+    },
+    "lower_teal": {
+      "type": "dielectric",
+      "refraction_index": 1.5,
+    }
+  },
+  "objects": [
+    {
+      "type": "triangle",
+      "q": [-3.0, -2.0, 5.0],
+      "u": [0.0, 0.0, -4.0],
+      "v": [0.0, 4.0, 0.0],
+      "material": "left_red"
+    },
+    {
+      "type": "elipse",
+      "q": [0.0, 0.0, 0.0],
+      "u": [2.0, 0.0, 0.0],
+      "v": [0.0, 1.0, -1.0],
+      "material": "back_green"
+    },
+    {
+      "type": "triangle",
+      "q": [3.0, -2.0, 1.0],
+      "u": [0.0, 0.0, 4.0],
+      "v": [0.0, 4.0, 0.0],
+      "material": "right_blue"
+    },
+    {
+      "type": "quad",
+      "q": [-2.0, 3.0, 1.0],
+      "u": [4.0, 0.0, 0.0],
+      "v": [0.0, 0.0, 4.0],
+      "material": "upper_orange"
+    },
+    {
+      "type": "quad",
+      "q": [-2.0, -3.0, 5.0],
+      "u": [4.0, 0.0, 0.0],
+      "v": [0.0, 0.0, -4.0],
+      "material": "lower_teal"
+    }
+  ]
+}

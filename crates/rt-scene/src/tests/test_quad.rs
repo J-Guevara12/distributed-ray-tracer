@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use rt_core::{Color, Point3, Ray, Vec3};
 
-use crate::{HitRecord, Hittable, Interval, Material, geometry::Quad};
+use crate::{
+    HitRecord, Hittable, Interval, Material,
+    geometry::{PlanarShape, PlanarType},
+};
 
 // 1. Creamos un Material Dummy para las pruebas que no requiera lógica compleja
 #[derive(Debug)]
@@ -15,12 +18,13 @@ impl Material for MockMaterial {
 
 // Función auxiliar para construir un cuadrilátero de prueba frente a la cámara.
 // Es un cuadrado perfecto de 2x2 en el plano XY, empujado a Z = -2.0.
-fn setup_test_quad() -> Quad {
+fn setup_test_quad() -> PlanarShape {
     let material = Arc::new(MockMaterial);
-    Quad::new(
+    PlanarShape::new(
         Point3::new(-1.0, -1.0, -2.0), // q: Esquina inferior izquierda
         Vec3::new(2.0, 0.0, 0.0),      // u: Se extiende 2 unidades a la derecha (Eje X)
         Vec3::new(0.0, 2.0, 0.0),      // v: Se extiende 2 unidades hacia arriba (Eje Y)
+        PlanarType::Quad,
         material,
     )
 }

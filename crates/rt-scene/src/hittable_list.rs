@@ -1,7 +1,7 @@
 use rt_core::dto::{MaterialDTO, ObjectDTO, ScenePayload};
 
 use crate::{
-    geometry::{Quad, Sphere},
+    geometry::{PlanarShape, Sphere},
     materials::{Dielectric, Lambertian, Metal},
     *,
 };
@@ -83,9 +83,41 @@ impl From<&ScenePayload> for HittableList {
                 }
                 ObjectDTO::Quad { q, u, v, material } => {
                     if let Some(mat) = materials.get(material) {
-                        let quad = Quad::new(*q, *u, *v, Arc::clone(mat));
+                        let quad = PlanarShape::new(
+                            *q,
+                            *u,
+                            *v,
+                            geometry::PlanarType::Quad,
+                            Arc::clone(mat),
+                        );
 
                         mundo.add(Arc::new(quad));
+                    }
+                }
+                ObjectDTO::Triangle { q, u, v, material } => {
+                    if let Some(mat) = materials.get(material) {
+                        let triangle = PlanarShape::new(
+                            *q,
+                            *u,
+                            *v,
+                            geometry::PlanarType::Triangle,
+                            Arc::clone(mat),
+                        );
+
+                        mundo.add(Arc::new(triangle));
+                    }
+                }
+                ObjectDTO::Elipse { q, u, v, material } => {
+                    if let Some(mat) = materials.get(material) {
+                        let elipse = PlanarShape::new(
+                            *q,
+                            *u,
+                            *v,
+                            geometry::PlanarType::Elipse,
+                            Arc::clone(mat),
+                        );
+
+                        mundo.add(Arc::new(elipse));
                     }
                 }
             }

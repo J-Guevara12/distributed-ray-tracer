@@ -23,7 +23,7 @@ Content-Type: application/json
     1,
     0
   ],
-  "samples_per_pixel": 10,
+  "samples_per_pixel": 250,
   "defocus_angle": 0,
   "focus_dist": 1
 }

@@ -49,6 +49,16 @@ pub async fn post_render(
         }
     };
 
+    let background = match state.scene_data.read() {
+        Ok(scene) => scene.as_ref().unwrap().background.clone(),
+        Err(_) => {
+            let error_body = Json(ErrorResponse {
+                error: "The global camera lock hs suffered a poisoning".to_string(),
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, error_body));
+        }
+    };
+
     let fb_worker = Arc::clone(&state.framebuffer);
     let tx_worker = state.tx_stream.clone();
     let is_finished_worker = state.is_finished.clone();
@@ -68,6 +78,7 @@ pub async fn post_render(
             payload.tile_size.unwrap_or(128),
             3,
             &*world,
+            &background,
         );
         is_finished_worker.store(true, std::sync::atomic::Ordering::SeqCst);
     });

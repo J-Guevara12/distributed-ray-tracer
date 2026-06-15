@@ -1,14 +1,14 @@
-use rt_core::{Color, Interval, Ray};
+use rt_core::{Color, Interval, Ray, background::Background};
 use rt_scene::Hittable;
 
 pub trait RayTracer: Send + Sync + 'static {
-    fn trace_ray(&self, ray: Ray, world: &dyn Hittable) -> Color;
+    fn trace_ray(&self, ray: Ray, world: &dyn Hittable, background: &Background) -> Color;
 }
 
 pub struct NormalTracer {}
 
 impl RayTracer for NormalTracer {
-    fn trace_ray(&self, ray: Ray, world: &dyn Hittable) -> Color {
+    fn trace_ray(&self, ray: Ray, world: &dyn Hittable, background: &Background) -> Color {
         let interval = Interval::new(0.0, f32::INFINITY);
 
         if let Some(rec) = world.hit(&ray, interval) {
@@ -19,15 +19,7 @@ impl RayTracer for NormalTracer {
 
             return Color::new(r, g, b);
         }
-        let unit_direction = ray.direction;
-
-        let t = 0.5 * (unit_direction.y + 1.0);
-
-        let r = (1.0 - t) * 1.0 + t * 0.5;
-        let g = (1.0 - t) * 1.0 + t * 0.7;
-        let b = (1.0 - t) * 1.0 + t * 1.0;
-
-        Color::new(r, g, b)
+        background.emit(&ray)
     }
 }
 
@@ -42,7 +34,7 @@ impl PathTracer {
 }
 
 impl RayTracer for PathTracer {
-    fn trace_ray(&self, ray: Ray, world: &dyn Hittable) -> Color {
+    fn trace_ray(&self, ray: Ray, world: &dyn Hittable, background: &Background) -> Color {
         let mut current_ray = ray;
 
         let mut attenuation = Color::ONE;
@@ -54,7 +46,7 @@ impl RayTracer for PathTracer {
 
             if let Some(rec) = world.hit(&current_ray, interval) {
                 let emitted = rec.material.emitted(rec.normal[0], rec.normal[0], rec.p);
-                accumulated_light = attenuation * emitted;
+                accumulated_light += attenuation * emitted;
 
                 if let Some((attenuation_material, scattered_ray)) =
                     rec.material.scatter(&current_ray, &rec)
@@ -65,10 +57,7 @@ impl RayTracer for PathTracer {
                     return accumulated_light;
                 }
             } else {
-                let sky = Color::new(0.0, 0.0, 0.0);
-                accumulated_light += attenuation * sky;
-
-                return attenuation * sky;
+                return accumulated_light + attenuation * background.emit(&current_ray);
             }
         }
         accumulated_light

@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
-use rt_core::{Color, Interval, Point3, Ray, Vec3};
+use rt_core::{Color, Interval, Point3, Ray, Vec3, background::Background};
 use rt_scene::{
     HitRecord, Hittable, Material, geometry::Sphere, hittable_list::HittableList,
     materials::Lambertian,
@@ -18,7 +18,9 @@ fn test_tracer_fallback_to_gradient_on_miss() {
 
     // Un rayo apuntando hacia arriba (Y = 1.0), debería dar el color azul del cielo puro
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-    let color = tracer.trace_ray(ray, world.as_ref());
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+
+    let color = tracer.trace_ray(ray, world.as_ref(), &background);
 
     // El azul del gradiente es [128, 179, 255] aprox (t = 1.0)
     assert_eq!(color[2], 1.0); // El canal azul debe estar al tope
@@ -39,7 +41,8 @@ fn test_tracer_renders_normal_on_hit() {
     // Disparamos un rayo al centro exacto de la esfera
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
 
-    let color = tracer.trace_ray(ray, &world);
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    let color = tracer.trace_ray(ray, &world, &background);
     println!("{}: color", color);
 
     // En el centro exacto, la normal apunta directo a la cámara (Z = 1.0)
@@ -117,7 +120,8 @@ fn test_path_tracer_max_depth_returns_black() {
 
     // Disparamos un rayo directo al plano
     let ray = Ray::new(Point3::new(0.0, 1.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
-    let color_resultado = tracer.trace_ray(ray, &world);
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    let color_resultado = tracer.trace_ray(ray, &world, &background);
 
     // ASSERT: Al quedarse atrapado y agotar los bounces, el resultado debe ser negro absoluto.
     assert_eq!(
@@ -177,7 +181,8 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
     let ray = Ray::new(Point3::new(0.0, 1.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
 
     // Ejecutamos el trazado
-    let color_final = tracer.trace_ray(ray, &world);
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    let color_final = tracer.trace_ray(ray, &world, &background);
 
     // El color del cielo cuando el rayo escapa (dirección Y >= 0 tras pasar el límite de impactos)
     // Según tu ecuación del cielo: t = 0.5 * (dir.y + 1.0). Al ir horizontal o hacia arriba, calculamos el color base:
@@ -213,7 +218,8 @@ fn test_path_tracer_miss_returns_sky_gradient() {
     // t = 0.5 * (1.0 + 1.0) = 1.0
     // Color esperado: Color::ONE * (0.0) + Color::new(0.5, 0.7, 1.0) * 1.0 = [0.5, 0.7, 1.0]
     let ray_up = Ray::new(Point3::ZERO, Vec3::Y);
-    let color_up = tracer.trace_ray(ray_up, &world);
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    let color_up = tracer.trace_ray(ray_up, &world, &background);
 
     assert_eq!(
         color_up,
@@ -225,7 +231,8 @@ fn test_path_tracer_miss_returns_sky_gradient() {
     // t = 0.5 * (-1.0 + 1.0) = 0.0
     // Color esperado: Color::ONE * (1.0) = [1.0, 1.0, 1.0] (Blanco puro en la base)
     let ray_down = Ray::new(Point3::ZERO, -Vec3::Y);
-    let color_down = tracer.trace_ray(ray_down, &world);
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    let color_down = tracer.trace_ray(ray_down, &world, &background);
 
     assert_eq!(
         color_down,

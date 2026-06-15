@@ -5,6 +5,10 @@ POST {{baseUrl}}/scene
 Content-Type: application/json
 
 {
+  "background": {
+      "type": "solid",
+      "color": [0.0, 0.0, 0.0]
+  },
   "materials": {
     "red": {
       "type": "lambertian",
@@ -86,7 +90,7 @@ Content-Type: application/json
     1,
     0
   ],
-  "samples_per_pixel": 500,
+  "samples_per_pixel": 50,
   "defocus_angle": 0,
   "focus_dist": 1
 }

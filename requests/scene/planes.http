@@ -5,6 +5,11 @@ POST {{baseUrl}}/scene
 Content-Type: application/json
 
 {
+  "background": {
+      "type": "gradient",
+      "top": [ 0.5, 0.7, 1.0 ],
+      "bottom": [ 1.0, 1.0, 1.0 ]
+  },
   "materials": {
     "left_red": {
       "type": "lambertian",

@@ -2,6 +2,7 @@ use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
 use crate::render::render_scene;
 use crate::tracers::RayTracer;
+use rt_core::background::Background;
 use rt_core::{Color, Point3, Ray, Vec3};
 use rt_scene::Hittable;
 use rt_scene::hittable_list::HittableList;
@@ -15,7 +16,7 @@ struct MockRayTracer {
 }
 
 impl RayTracer for MockRayTracer {
-    fn trace_ray(&self, _ray: Ray, _world: &dyn Hittable) -> Color {
+    fn trace_ray(&self, _ray: Ray, _world: &dyn Hittable, _background: &Background) -> Color {
         // No importa la dirección del rayo, siempre devolvemos el mismo color
         self.fixed_color
     }
@@ -53,6 +54,7 @@ fn test_render_scene_integration() {
     let framebuffer = Arc::new(FrameBuffer::new(width, height, stride));
     let (tx_stream, mut rx_stream) = broadcast::channel(10);
     let world = Arc::new(HittableList::new());
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
 
     // 3. EJECUCIÓN: Corremos el orquestador de la escena
     render_scene(
@@ -63,6 +65,7 @@ fn test_render_scene_integration() {
         tile_size,
         stride,
         world.as_ref(),
+        &background,
     );
 
     // 4. ASERCIÓN 1: Validar el canal de comunicación (Broadcast)

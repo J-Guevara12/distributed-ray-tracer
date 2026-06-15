@@ -1,7 +1,12 @@
 use std::{fs::File, sync::Arc, time::Instant};
 
-use rt_core::dto::ScenePayload;
-use rt_renderer::{camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tracers::PathTracer};
+use rt_core::{Color, background::Background, dto::ScenePayload};
+use rt_renderer::{
+    camera::{Camera, CameraConfig},
+    framebuffer::FrameBuffer,
+    render::render_scene,
+    tracers::PathTracer,
+};
 use rt_scene::hittable_list::HittableList;
 use tokio::sync::broadcast;
 
@@ -24,7 +29,18 @@ pub fn main() {
 
     let ray_tracer = PathTracer::new(15);
     let instant = Instant::now();
-    render_scene(Arc::new(camera), Arc::new(ray_tracer), Arc::clone(&framebuffer), tx_stream, 128, 3, &world);
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+
+    render_scene(
+        Arc::new(camera),
+        Arc::new(ray_tracer),
+        Arc::clone(&framebuffer),
+        tx_stream,
+        128,
+        3,
+        &world,
+        &background,
+    );
     println!("Procesado en {} ms", instant.elapsed().as_millis());
     framebuffer.save_png("result.png").unwrap();
 }

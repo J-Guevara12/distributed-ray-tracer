@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{Color, Point3, Vec3};
+use crate::{Color, Point3, Vec3, background::Background};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScenePayload {
     pub materials: HashMap<String, MaterialDTO>,
     pub objects: Vec<ObjectDTO>,
+    pub background: Background,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,8 +56,16 @@ pub enum ObjectDTO {
 }
 
 impl ScenePayload {
-    pub fn new(materials: HashMap<String, MaterialDTO>, objects: Vec<ObjectDTO>) -> Self {
-        Self { materials, objects }
+    pub fn new(
+        materials: HashMap<String, MaterialDTO>,
+        objects: Vec<ObjectDTO>,
+        background: Background,
+    ) -> Self {
+        Self {
+            materials,
+            objects,
+            background,
+        }
     }
 }
 
@@ -125,6 +134,8 @@ impl Default for ScenePayload {
                 material: "up_in".to_string(),
             },
         ];
-        Self::new(materials, objects)
+        let background =
+            Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+        Self::new(materials, objects, background)
     }
 }

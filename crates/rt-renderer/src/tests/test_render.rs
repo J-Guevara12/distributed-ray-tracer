@@ -47,7 +47,7 @@ fn test_render_scene_integration() {
 
     // Instanciamos nuestro tracer simulado para que pinte todo de VERDE PURO
     let tracer = Arc::new(MockRayTracer {
-        fixed_color: Color::new(0.0, 1.0, 0.0),
+        fixed_color: Color::new(0.0, 50.0, 0.0),
     });
 
     // Instanciamos el FrameBuffer y el canal de comunicación

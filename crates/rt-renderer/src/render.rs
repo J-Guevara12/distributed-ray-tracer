@@ -3,7 +3,7 @@ use rt_scene::Hittable;
 use std::sync::Arc;
 use tracing::{Level, span};
 
-use rt_core::{Color, background::Background};
+use rt_core::{Color, Vec3, background::Background};
 use tokio::sync::broadcast;
 
 use crate::{
@@ -53,7 +53,8 @@ pub fn render_scene<T: RayTracer>(
 
                     color_accumulator += color;
                 }
-                let gamma_corrected = 255.9 * (color_accumulator / samples_float).sqrt();
+                let gamma_corrected =
+                    255.9 * (aces_filmic_tone_map(color_accumulator / samples_float)).sqrt();
 
                 pixels.push(gamma_corrected[0] as u8);
                 pixels.push(gamma_corrected[1] as u8);
@@ -70,4 +71,14 @@ pub fn render_scene<T: RayTracer>(
 
         let _ = tx_stream.send(result);
     })
+}
+
+fn aces_filmic_tone_map(hdr: Color) -> Color {
+    let a = Vec3::splat(2.51);
+    let b = Vec3::splat(0.03);
+    let c = Vec3::splat(2.43);
+    let d = Vec3::splat(0.59);
+    let e = Vec3::splat(0.14);
+
+    ((hdr * (a * hdr + b)) / (hdr * (c * hdr + d) + e)).clamp(Vec3::ZERO, Vec3::ONE)
 }

@@ -5,7 +5,7 @@
     "look_from":[16.0,2.0,3.0],
     "look_at":[0.0,0.0,0.0],
     "vup":[0.0,1.0,0.0],
-    "samples_per_pixel":200,
+    "samples_per_pixel":20,
     "defocus_angle": 0.5,
     "focus_dist": 16.0
 }

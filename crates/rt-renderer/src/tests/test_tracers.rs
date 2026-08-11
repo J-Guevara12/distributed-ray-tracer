@@ -6,59 +6,16 @@ use std::sync::{
 use rt_core::{Color, Interval, Point3, Ray, Vec3, background::Background};
 use rt_scene::{
     HitRecord, Hittable, Material, geometry::Sphere, hittable_list::HittableList,
-    materials::Lambertian,
+    materials::Lambertian, Aabb,
 };
 
 use crate::tracers::{NormalTracer, PathTracer, RayTracer};
 
-#[test]
-fn test_tracer_fallback_to_gradient_on_miss() {
-    let world = Arc::new(HittableList::new());
-    let tracer = NormalTracer {};
-
-    // Un rayo apuntando hacia arriba (Y = 1.0), debería dar el color azul del cielo puro
-    let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
-
-    let color = tracer.trace_ray(ray, world.as_ref(), &background);
-
-    // El azul del gradiente es [128, 179, 255] aprox (t = 1.0)
-    assert_eq!(color[2], 1.0); // El canal azul debe estar al tope
-}
-
-#[test]
-fn test_tracer_renders_normal_on_hit() {
-    let mut world = HittableList::new();
-    // Esfera en frente de la cámara
-    let material = Arc::new(Lambertian::new(Vec3::new(0.0, 0.0, 0.0)));
-    world.add(Arc::new(Sphere::new(
-        Point3::new(0.0, 0.0, -1.0),
-        0.5,
-        material,
-    )));
-
-    let tracer = NormalTracer {};
-    // Disparamos un rayo al centro exacto de la esfera
-    let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
-
-    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
-    let color = tracer.trace_ray(ray, &world, &background);
-    println!("{}: color", color);
-
-    // En el centro exacto, la normal apunta directo a la cámara (Z = 1.0)
-    // Mapeo Z: 0.5 * (1.0 + 1.0) = 1.0 -> 255 en el canal Azul (color[2])
-    // Mapeo X/Y: 0.5 * (0.0 + 1.0) = 0.5 -> ~128 en canales Rojo y Verde
-    assert!((color[0] - 0.5).abs() <= 2.0 / 255.0);
-    assert!((color[1] - 0.5).abs() <= 2.0 / 255.0);
-    assert!(color[2] >= 254.0 / 255.0);
-}
-
 // =========================================================================
-// MOCKS PARA PRUEBAS CONTROLADAS
+// MOCKS PARA PRUEBAS CONTROLADAS CON SOPORTE DE AABB PARA BVH
 // =========================================================================
 
-// 1. Un material que absorbe una cantidad fija y refleja el rayo siempre en la misma dirección.
-// Esto rompe el azar de fastrand para hacer el test 100% determinista.
+// 1. Un material determinista que elimina la aleatoriedad de fastrand en las pruebas
 #[derive(Debug)]
 struct PredictableMaterial {
     albedo: Color,
@@ -67,12 +24,11 @@ struct PredictableMaterial {
 
 impl Material for PredictableMaterial {
     fn scatter(&self, _ray_in: &Ray, rec: &HitRecord) -> Option<(Color, Ray)> {
-        // Devuelve siempre la misma atenuación y la misma dirección forzada
         Some((self.albedo, Ray::new(rec.p, self.forced_direction)))
     }
 }
 
-// 2. Una geometría ficticia que simula un plano infinito en Y = 0
+// 2. Un plano infinito en Y = 0 compatible con el Trait Hittable
 #[derive(Debug)]
 struct MockPlane {
     material: Arc<dyn Material>,
@@ -80,14 +36,13 @@ struct MockPlane {
 
 impl Hittable for MockPlane {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
-        // Si el rayo va hacia abajo (Y negativa), simulamos un impacto en el origen
         if ray.direction.y < 0.0 {
             let t = 1.0;
             if ray_t.contains(t) {
                 return Some(HitRecord::new(
                     ray,
                     t,
-                    Vec3::Y, // Normal hacia arriba
+                    Vec3::Y,
                     Point3::ZERO,
                     &*self.material,
                 ));
@@ -95,56 +50,93 @@ impl Hittable for MockPlane {
         }
         None
     }
+
+    fn bounding_box(&self) -> Aabb {
+        // Un plano infinito usa una caja acotada por valores extremos acolchada
+        Aabb {
+            x: Interval::new(-f32::INFINITY, f32::INFINITY),
+            y: Interval::new(-0.01, 0.01),
+            z: Interval::new(-f32::INFINITY, f32::INFINITY),
+        }
+    }
 }
 
 // =========================================================================
-// SUITE DE TESTS INTENSIVOS
+// SUITE DE TESTS PRÁCTICOS Y DE TRAZADORES
 // =========================================================================
 
 #[test]
-fn test_path_tracer_max_depth_returns_black() {
-    // ESCENARIO: Un rayo rebota eternamente entre dos superficies sin escapar.
-    // El PathTracer debe detenerse estrictamente en max_depth.
+fn test_tracer_fallback_to_gradient_on_miss() {
+    let world = Arc::new(HittableList::new());
+    let tracer = NormalTracer {};
 
+    // Rayo apuntando verticalmente hacia arriba (Y = 1.0)
+    let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+
+    let color = tracer.trace_ray(ray, world.as_ref(), &background);
+
+    // En Y = 1.0 puro, el gradiente debe devolver exactamente el color superior [0.5, 0.7, 1.0]
+    assert_eq!(color[2], 1.0);
+}
+
+#[test]
+fn test_tracer_renders_normal_on_hit() {
+    let mut world = HittableList::new();
+    let material = Arc::new(Lambertian::new(Vec3::new(0.0, 0.0, 0.0)));
+    world.add(Arc::new(Sphere::new(
+        Point3::new(0.0, 0.0, -1.0),
+        0.5,
+        material,
+    )));
+
+    let tracer = NormalTracer {};
+    let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
+
+    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    let color = tracer.trace_ray(ray, &world, &background);
+
+    // En el centro exacto, la normal mapeada (N + 1) * 0.5 debe dar:
+    // X=0 -> 0.5, Y=0 -> 0.5, Z=1 -> 1.0
+    assert!((color[0] - 0.5).abs() <= 2.0 / 255.0);
+    assert!((color[1] - 0.5).abs() <= 2.0 / 255.0);
+    assert!(color[2] >= 254.0 / 255.0);
+}
+
+#[test]
+fn test_path_tracer_max_depth_returns_black() {
     let mat_espejo_infinito = Arc::new(PredictableMaterial {
-        albedo: Color::ONE, // Refleja el 100% de la luz (no pierde energía por color)
-        forced_direction: Vec3::new(0.0, -1.0, 0.0), // Vuelve a disparar hacia abajo
+        albedo: Color::ONE,
+        forced_direction: Vec3::new(0.0, -1.0, 0.0),
     });
 
     let world = MockPlane {
         material: mat_espejo_infinito,
     };
 
-    // Configuramos un límite de 5 rebotes
     let tracer = PathTracer::new(5);
-
-    // Disparamos un rayo directo al plano
     let ray = Ray::new(Point3::new(0.0, 1.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
     let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    
     let color_resultado = tracer.trace_ray(ray, &world, &background);
 
-    // ASSERT: Al quedarse atrapado y agotar los bounces, el resultado debe ser negro absoluto.
     assert_eq!(
         color_resultado,
         Color::ZERO,
-        "El rayo debió agotar los bounces y retornar negro, pero devolvió {:?}",
-        color_resultado
+        "El rayo debió agotar los bounces y retornar negro"
     );
 }
 
 #[test]
 fn test_path_tracer_energy_conservation_exponential_decay() {
-    // ESCENARIO: El rayo golpea una superficie que absorbe exactamente la mitad de la luz (albedo 0.5)
-    // en cada rebote. Forzamos a que golpee 3 veces antes de escapar al cielo.
-
-    // Tras 3 rebotes, la luz que quede debe multiplicarse por: 0.5 * 0.5 * 0.5 = 0.125
     let factor_absorcion = 0.5;
+    
+    // 🟢 El material mantiene la dirección hacia abajo (-Y) para forzar los rebrotes sucesivos
     let mat_absorbente = Arc::new(PredictableMaterial {
         albedo: Color::splat(factor_absorcion),
-        forced_direction: Vec3::new(0.0, -1.0, 0.0),
+        forced_direction: Vec3::new(0.0, -1.0, 0.0), 
     });
 
-    // Una estructura para controlar cuántas veces dejamos que el rayo choque antes de dejarlo pasar al vacío
     struct FiniteBouncesZone {
         material: Arc<dyn Material>,
         hit_count: AtomicU32,
@@ -152,12 +144,11 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
     }
 
     impl Hittable for FiniteBouncesZone {
-        fn hit(&self, ray: &Ray, _ray_t: Interval) -> Option<HitRecord<'_>> {
-            // Leemos el valor atómico actual con ordenamiento Relajado (suficiente para un test)
+        fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
             let current_hits = self.hit_count.load(Ordering::Relaxed);
 
+            // Si aún no alcanza el máximo de impactos, absorbe y refleja el rayo
             if ray.direction.y < 0.0 && current_hits < self.max_hits {
-                // Incrementamos el contador de forma atómica y segura entre hilos
                 self.hit_count.fetch_add(1, Ordering::Relaxed);
 
                 return Some(HitRecord::new(
@@ -168,55 +159,61 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
                     &*self.material,
                 ));
             }
+            // En el 4to intento, ya no colisiona y deja pasar el rayo al cielo
             None
         }
+
+        fn bounding_box(&self) -> Aabb {
+            Aabb {
+                x: Interval::new(-1.0, 1.0),
+                y: Interval::new(-1.0, 1.0),
+                z: Interval::new(-1.0, 1.0),
+            }
+        }
     }
+
     let world = FiniteBouncesZone {
         material: mat_absorbente,
         hit_count: AtomicU32::new(0),
-        max_hits: 3, // Forzamos exactamente 3 impactos
+        max_hits: 3,
     };
 
     let tracer = PathTracer::new(10);
+    // Disparamos el primer rayo hacia abajo
     let ray = Ray::new(Point3::new(0.0, 1.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
+    
+    // Un cielo con color uniforme para que el cálculo de color al escapar sea simple
+    let sky_color = Color::new(0.5, 0.7, 1.0);
+    let background = Background::new_gradient(sky_color, sky_color);
 
-    // Ejecutamos el trazado
-    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
     let color_final = tracer.trace_ray(ray, &world, &background);
 
-    // El color del cielo cuando el rayo escapa (dirección Y >= 0 tras pasar el límite de impactos)
-    // Según tu ecuación del cielo: t = 0.5 * (dir.y + 1.0). Al ir horizontal o hacia arriba, calculamos el color base:
-    // Nota: Ajusta este assert basado en el color exacto de tu fondo/cielo.
-
     let final_hits = world.hit_count.load(Ordering::Relaxed);
-    assert!(final_hits == 3, "El rayo debió golpear exactamente 3 veces");
+    assert_eq!(final_hits, 3, "El rayo debió golpear exactamente 3 veces");
 
-    // Verificamos que los canales no sean cero y que hayan sufrido la degradación exponencial (0.5^3 = 0.125)
-    assert!(color_final.x > 0.0, "La energía se desvaneció por completo");
+    // Color esperado: sky_color * (0.5 ^ 3) = sky_color * 0.125
+    let color_esperado = sky_color * 0.125;
 
-    // Si el material reduce a la mitad, la proporción con respecto a un escape directo debe ser exactamente 0.125
-    // (Este delta 1e-4 mitiga imprecisiones de punto flotante f32)
-    assert!((color_final.x - (color_final.x / color_final.x) * 0.125).abs() < 1e-4);
+    assert!((color_final.x - color_esperado.x).abs() < 1e-4);
+    assert!((color_final.y - color_esperado.y).abs() < 1e-4);
+    assert!((color_final.z - color_esperado.z).abs() < 1e-4);
 }
 
 #[test]
 fn test_path_tracer_miss_returns_sky_gradient() {
-    // ESCENARIO: El rayo se dispara directamente hacia el horizonte o el cielo desértico.
-    // No debe colisionar con nada y debe devolver el color puro del gradiente del fondo.
-
     struct EmptyWorld;
     impl Hittable for EmptyWorld {
         fn hit(&self, _ray: &Ray, _ray_t: Interval) -> Option<HitRecord<'_>> {
             None
+        }
+        fn bounding_box(&self) -> Aabb {
+            Aabb::default()
         }
     }
 
     let world = EmptyWorld;
     let tracer = PathTracer::new(1);
 
-    // Rayo disparado verticalmente hacia arriba (0.0, 1.0, 0.0) -> unit_dir.y = 1.0
-    // t = 0.5 * (1.0 + 1.0) = 1.0
-    // Color esperado: Color::ONE * (0.0) + Color::new(0.5, 0.7, 1.0) * 1.0 = [0.5, 0.7, 1.0]
     let ray_up = Ray::new(Point3::ZERO, Vec3::Y);
     let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
     let color_up = tracer.trace_ray(ray_up, &world, &background);
@@ -227,11 +224,7 @@ fn test_path_tracer_miss_returns_sky_gradient() {
         "El gradiente superior del cielo es incorrecto"
     );
 
-    // Rayo disparado verticalmente hacia abajo (0.0, -1.0, 0.0) -> unit_dir.y = -1.0
-    // t = 0.5 * (-1.0 + 1.0) = 0.0
-    // Color esperado: Color::ONE * (1.0) = [1.0, 1.0, 1.0] (Blanco puro en la base)
     let ray_down = Ray::new(Point3::ZERO, -Vec3::Y);
-    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
     let color_down = tracer.trace_ray(ray_down, &world, &background);
 
     assert_eq!(

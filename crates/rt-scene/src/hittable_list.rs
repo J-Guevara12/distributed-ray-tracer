@@ -12,12 +12,14 @@ use std::{collections::HashMap, sync::Arc};
 #[derive(Default)]
 pub struct HittableList {
     pub objects: Vec<Arc<dyn Hittable>>,
+    bbox: Aabb,
 }
 
 impl HittableList {
     pub fn new() -> Self {
         Self {
             objects: Vec::new(),
+            bbox: Aabb::default()
         }
     }
 
@@ -26,6 +28,7 @@ impl HittableList {
     }
 
     pub fn add(&mut self, object: Arc<dyn Hittable>) {
+        self.bbox = Aabb::surrounding_box(self.bbox, object.bounding_box());
         self.objects.push(object);
     }
 }
@@ -45,6 +48,9 @@ impl Hittable for HittableList {
         }
 
         hit_anything
+    }
+    fn bounding_box(&self) -> Aabb {
+        self.bbox
     }
 }
 

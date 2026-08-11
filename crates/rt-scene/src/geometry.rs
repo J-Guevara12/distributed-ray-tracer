@@ -23,6 +23,7 @@ pub struct PlanarShape {
     pub d: f32,
     pub primitive_type: PlanarType,
     pub material: Arc<dyn Material>,
+    pub bbox: Aabb
 }
 
 impl Sphere {
@@ -70,6 +71,13 @@ impl Hittable for Sphere {
             self.material.as_ref(),
         ))
     }
+    fn bounding_box(&self) -> Aabb {
+        let x = Interval::new(self.center[0]-self.radius, self.center[0]+self.radius);
+        let y = Interval::new(self.center[1]-self.radius, self.center[1]+self.radius);
+        let z = Interval::new(self.center[2]-self.radius, self.center[2]+self.radius);
+
+        return Aabb { x, y, z }
+    }
 }
 
 impl PlanarShape {
@@ -84,6 +92,27 @@ impl PlanarShape {
         let n = w.normalize();
         let d = n.dot(q);
         let w = w / (w.dot(w));
+
+        let raw_bbox = match primitive_type {
+            PlanarType::Quad => {
+                let box_a = Aabb::from_points(q, q+u+v);
+                let box_b = Aabb::from_points(q + u, q + v);
+                Aabb::surrounding_box(box_a, box_b)
+            },
+            PlanarType::Triangle => {
+                let box_a = Aabb::from_points(q, q+u+v);
+                let box_b = Aabb::from_points(q + u, q + v);
+                Aabb::surrounding_box(box_a, box_b)
+            }
+            PlanarType::Elipse => {
+                let box_a = Aabb::from_points(q - u - v, q + u + v);
+                let box_b = Aabb::from_points(q - u + v, q + u - v);
+                Aabb::surrounding_box(box_a, box_b)
+            }
+        };
+
+        let bbox = raw_bbox.pad_delta();
+
         Self {
             q,
             u,
@@ -93,6 +122,7 @@ impl PlanarShape {
             d,
             primitive_type,
             material,
+            bbox
         }
     }
 
@@ -139,5 +169,9 @@ impl Hittable for PlanarShape {
             intersection,
             self.material.as_ref(),
         ))
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        self.bbox
     }
 }

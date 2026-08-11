@@ -1,9 +1,13 @@
 use rt_core::{Color, Interval, Point3, Ray, Vec3};
 use std::fmt::Debug;
 
+pub use crate::aabb::Aabb;
+
 pub mod geometry;
 pub mod hittable_list;
 pub mod materials;
+pub mod aabb;
+pub mod bvh;
 mod utils;
 
 #[derive(Debug, Clone, Copy)]
@@ -43,6 +47,7 @@ impl<'a> HitRecord<'a> {
 
 pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>>;
+    fn bounding_box(&self) -> Aabb;
 }
 
 pub trait Material: Send + Sync + Debug {

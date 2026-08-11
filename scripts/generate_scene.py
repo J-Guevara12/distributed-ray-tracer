@@ -158,7 +158,7 @@ def generate_random_scene():
                         "material": mat_in_name
                     })
 
-    return {"materials": materials, "objects": objects}
+    return {"materials": materials, "objects": objects, "background": { "type": "gradient", "top": [ 0.5, 0.7, 1.0 ], "bottom": [ 1.0, 1.0, 1.0 ] }}
 
 
 def main():

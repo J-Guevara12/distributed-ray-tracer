@@ -1,6 +1,6 @@
 use rt_core::{Job, dto::ScenePayload};
 use rt_renderer::{camera::Camera, framebuffer::FrameBuffer};
-use rt_scene::{Hittable, hittable_list::HittableList};
+use rt_scene::{Hittable, bvh::BvhNode, hittable_list::HittableList};
 use std::sync::{
     Arc, RwLock,
     atomic::{AtomicBool, AtomicUsize},
@@ -29,9 +29,11 @@ impl AppState {
 
         let camera = Arc::new(RwLock::new(camera));
         let scene_data = ScenePayload::default();
-        let world = Arc::new(RwLock::new(
-            Arc::new(HittableList::from(&scene_data)) as Arc<dyn Hittable + Send + Sync>
-        ));
+
+        let hittable_list = HittableList::from(&scene_data);
+        let bvh = BvhNode::new(hittable_list.objects);
+
+        let world = Arc::new(RwLock::new( Arc::new(bvh) as Arc<dyn Hittable + Send + Sync>));
         let scene_data = Arc::new(RwLock::new(Some(scene_data)));
 
         Self {

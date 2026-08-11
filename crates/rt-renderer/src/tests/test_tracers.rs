@@ -144,7 +144,7 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
     }
 
     impl Hittable for FiniteBouncesZone {
-        fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
+        fn hit(&self, ray: &Ray, _ray_t: Interval) -> Option<HitRecord<'_>> {
             let current_hits = self.hit_count.load(Ordering::Relaxed);
 
             // Si aún no alcanza el máximo de impactos, absorbe y refleja el rayo

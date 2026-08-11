@@ -7,7 +7,7 @@ use rt_renderer::{
     render::render_scene,
     tracers::PathTracer,
 };
-use rt_scene::hittable_list::HittableList;
+use rt_scene::{bvh::BvhNode, hittable_list::HittableList};
 use tokio::sync::broadcast;
 
 pub fn main() {
@@ -21,7 +21,8 @@ pub fn main() {
     let file_camera = File::open(path_camera).expect("Error abriendo el archivo de la cámara");
     let camera_config: CameraConfig = serde_json::from_reader(file_camera).unwrap();
 
-    let world = HittableList::from(&scene_payload);
+    let hittable_list = HittableList::from(&scene_payload);
+    let world = BvhNode::new(hittable_list.objects);
     let camera = Camera::new(camera_config);
 
     let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height, 3));

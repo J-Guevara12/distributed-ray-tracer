@@ -188,7 +188,7 @@ def main():
         # 2. Actualizar el Mundo (Scene)
         print("\nSending 🌍 WORLD geometry data to Axum...")
         scene_res = requests.post(f"{BASE_URL}/scene", json=scene_payload)
-        if scene_res.status_code == 200:
+        if scene_res.status_code == 201:
             print(" -> Escena inyectada con éxito en el AppState.")
         else:
             print(f" -> Error en escena: {scene_res.status_code}")
@@ -196,7 +196,7 @@ def main():
         # 3. Disparar el Proceso de Renderizado
         print("\n🚀 Disparando señal de RENDER a la cola distribuidora...")
         render_res = requests.post(f"{BASE_URL}/render", json={}, headers={"Content-Type": "application/json"})
-        if render_res.status_code == 200:
+        if render_res.status_code == 201:
             print(" -> ¡Render iniciado! Los workers ya deben estar masticando píxeles.")
         else:
             print(f" -> Error al disparar render: {render_res.status_code}")

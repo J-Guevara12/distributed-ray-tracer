@@ -30,7 +30,7 @@ impl Ray {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Interval {
     pub min: f32,
     pub max: f32,
@@ -47,6 +47,16 @@ impl Interval {
 
     pub fn surrounds(&self, x: f32) -> bool {
         self.min < x && x < self.max
+    }
+
+    pub fn expand(&self, delta: f32) -> Self {
+        let min = self.min - delta;
+        let max = self.max + delta;
+        Self { min, max }
+    }
+
+    pub fn size(&self) -> f32 {
+        self.max - self.min
     }
 }
 

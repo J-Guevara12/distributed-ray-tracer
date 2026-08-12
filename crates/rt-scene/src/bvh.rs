@@ -12,7 +12,7 @@ pub struct BvhNode {
 
 impl BvhNode {
     pub fn new(mut objects: Vec<Arc<dyn Hittable>>) -> Self {
-        let axis = fastrand::i32(0..2);
+        let axis = fastrand::i32(0..3);
 
         let comparator = |a: &Arc<dyn Hittable>, b: &Arc<dyn Hittable>| {
             let box_a = a.bounding_box();

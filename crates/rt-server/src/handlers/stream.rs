@@ -2,16 +2,16 @@ use std::convert::Infallible;
 
 use axum::{extract::State, response::{Sse, sse::Event}};
 use futures_util::Stream;
-use rt_core::display::{DisplayParams, resolve, to_srgb8};
+use rt_core::display::{resolve, to_srgb8};
 use rt_renderer::tiles::{Tile, TilePatch };
 
 use crate::state::AppState;
 
 pub async fn render_stream_handler(State(state): State<AppState>) -> Sse<impl Stream<Item = Result<Event, Infallible>>>{
     let rx = state.tx_stream.subscribe();
+    let params = *state.display_params.read().unwrap();
 
     let current_snapshot = state.framebuffer.get_snapshot();
-    let params = DisplayParams::default();
     let current_image = tokio::task::spawn_blocking(move || {
         to_srgb8(&resolve(&current_snapshot), &params)
     }).await.unwrap_or_default();

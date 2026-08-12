@@ -1,4 +1,4 @@
-use rt_core::{Job, dto::ScenePayload};
+use rt_core::{Job, display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{camera::Camera, framebuffer::FrameBuffer};
 use rt_scene::{Hittable, bvh::BvhNode, hittable_list::HittableList};
 use std::sync::{
@@ -14,6 +14,7 @@ pub struct AppState {
     pub is_finished: Arc<std::sync::atomic::AtomicBool>,
     pub camera: Arc<RwLock<Arc<Camera>>>,
     pub world: Arc<RwLock<Arc<dyn Hittable + Send + Sync>>>,
+    pub display_params: Arc<RwLock<DisplayParams>>,
     pub scene_data: Arc<RwLock<Option<ScenePayload>>>,
     pub job_sender: mpsc::Sender<Job>,
     pub active_jobs_counter: Arc<AtomicUsize>,
@@ -35,6 +36,7 @@ impl AppState {
 
         let world = Arc::new(RwLock::new( Arc::new(bvh) as Arc<dyn Hittable + Send + Sync>));
         let scene_data = Arc::new(RwLock::new(Some(scene_data)));
+        let display_params = Arc::new(RwLock::new(DisplayParams::default()));
 
         Self {
             framebuffer,
@@ -42,6 +44,7 @@ impl AppState {
             is_finished,
             camera,
             world,
+            display_params,
             scene_data,
             job_sender,
             active_jobs_counter,

@@ -1,7 +1,6 @@
 use std::sync::{Arc, atomic::Ordering};
 
 use axum::{Json, extract::State, http::StatusCode};
-use rt_core::display::DisplayParams;
 use rt_renderer::{render::render_scene, tiles::{TilePatch, TileResult}, tracers::PathTracer};
 
 use crate::{handlers::ErrorResponse, state::AppState};
@@ -63,13 +62,14 @@ pub async fn post_render(
     let fb_worker = Arc::clone(&state.framebuffer);
     let tx_worker = state.tx_stream.clone();
     let is_finished_worker = state.is_finished.clone();
-    let params = DisplayParams::default();
 
     let tracer = Arc::new(PathTracer {
         max_depth: payload.max_depth.unwrap_or(10),
     });
+    let display_params = Arc::clone(&state.display_params);
 
     let on_tile = move |t: &TileResult| {
+        let params = display_params.read().unwrap();
         let patch = TilePatch::from_tile_result(t, &params);
         let _ = tx_worker.send(patch);
     };

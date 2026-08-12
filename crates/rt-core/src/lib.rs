@@ -1,9 +1,10 @@
-pub use glam::Vec3A;
+pub use glam::{Vec3A, Vec4};
 
 pub mod background;
 pub mod camera;
 pub mod dto;
 pub mod job;
+pub mod display;
 
 pub use job::*;
 

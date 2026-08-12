@@ -3,8 +3,7 @@ use rt_scene::Hittable;
 use std::sync::Arc;
 use tracing::{Level, span};
 
-use rt_core::{Color, Vec3, background::Background};
-use tokio::sync::broadcast;
+use rt_core::{Color, background::Background, Vec4};
 
 use crate::{
     camera::Camera,
@@ -17,9 +16,8 @@ pub fn render_scene<T: RayTracer>(
     camera: Arc<Camera>,
     tracer: Arc<T>,
     framebuffer: Arc<FrameBuffer>,
-    tx_stream: broadcast::Sender<TileResult>,
+    on_tile: &(impl Fn(&TileResult) + Send + Sync),
     tile_size: u32,
-    stride: usize,
     world: &dyn Hittable,
     background: &Background,
 ) {
@@ -37,7 +35,7 @@ pub fn render_scene<T: RayTracer>(
     let tiles: Vec<_> = generator.collect();
 
     tiles.par_iter().for_each(|tile| {
-        let mut pixels: Vec<u8> = Vec::with_capacity((tile.width * tile.height) as usize * stride);
+        let mut pixels: Vec<Vec4> = Vec::with_capacity((tile.width * tile.height) as usize);
 
         for local_y in 0..tile.height {
             for local_x in 0..tile.width {
@@ -53,32 +51,16 @@ pub fn render_scene<T: RayTracer>(
 
                     color_accumulator += color;
                 }
-                let gamma_corrected =
-                    255.9 * (aces_filmic_tone_map(color_accumulator / samples_float)).sqrt();
-
-                pixels.push(gamma_corrected[0] as u8);
-                pixels.push(gamma_corrected[1] as u8);
-                pixels.push(gamma_corrected[2] as u8);
+                let pixel_data = Vec4::new(color_accumulator.x, color_accumulator.y, color_accumulator.z, samples_float);
+                pixels.push(pixel_data)
             }
         }
         let result = TileResult {
-            tile_id: tile.id,
             pixels,
             original_tile: *tile,
         };
 
-        framebuffer.write_tile(&result, stride);
-
-        let _ = tx_stream.send(result);
+        framebuffer.write_tile(&result);
+        on_tile(&result)
     })
-}
-
-fn aces_filmic_tone_map(hdr: Color) -> Color {
-    let a = Vec3::splat(2.51);
-    let b = Vec3::splat(0.03);
-    let c = Vec3::splat(2.43);
-    let d = Vec3::splat(0.59);
-    let e = Vec3::splat(0.14);
-
-    ((hdr * (a * hdr + b)) / (hdr * (c * hdr + d) + e)).clamp(Vec3::ZERO, Vec3::ONE)
 }

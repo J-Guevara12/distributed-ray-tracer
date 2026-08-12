@@ -1,14 +1,10 @@
 use std::{fs::File, sync::Arc, time::Instant};
 
-use rt_core::{Color, background::Background, dto::ScenePayload};
+use rt_core::{Color, background::Background, display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{
-    camera::{Camera, CameraConfig},
-    framebuffer::FrameBuffer,
-    render::render_scene,
-    tracers::PathTracer,
+    camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tiles::TileResult, tracers::PathTracer,
 };
 use rt_scene::{bvh::BvhNode, hittable_list::HittableList};
-use tokio::sync::broadcast;
 
 pub fn main() {
     println!("Inicializando render local");
@@ -25,23 +21,24 @@ pub fn main() {
     let world = BvhNode::new(hittable_list.objects);
     let camera = Camera::new(camera_config);
 
-    let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height, 3));
-    let (tx_stream, _) = broadcast::channel(100);
+    let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height));
 
     let ray_tracer = PathTracer::new(15);
     let instant = Instant::now();
     let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
 
+    let on_tile = |_t: &TileResult| { };
+
     render_scene(
         Arc::new(camera),
         Arc::new(ray_tracer),
         Arc::clone(&framebuffer),
-        tx_stream,
+        &on_tile,
         128,
-        3,
         &world,
         &background,
     );
     println!("Procesado en {} ms", instant.elapsed().as_millis());
-    framebuffer.save_png("result.png").unwrap();
+    let display_params = DisplayParams::default();
+    framebuffer.save_png("result.png", &display_params).unwrap();
 }

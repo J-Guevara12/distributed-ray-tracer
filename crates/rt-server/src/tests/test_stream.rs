@@ -8,7 +8,7 @@ use crate::handlers::stream::render_stream_handler;
 async fn test_sse_render_stream_headers() {
     // 1. Configurar infraestructura mínima del Estado global de pruebas
     let (tx, _) = mpsc::channel(100);
-    let state = AppState::init_default(100, 3, tx);
+    let state = AppState::init_default(100, tx);
 
     // 2. Construir router de pruebas acoplado al handler SSE
     let app: Router<()> = Router::new()

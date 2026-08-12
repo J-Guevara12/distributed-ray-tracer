@@ -1,3 +1,4 @@
+use rt_core::{Vec4, display::{DisplayParams, resolve, to_srgb8}};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -8,11 +9,15 @@ pub struct Tile {
     pub width: u32,
     pub height: u32,
 }
-
-#[derive(Clone, Serialize)]
-pub struct TileResult {
-    pub tile_id: usize,
+#[derive(Serialize, Clone)]
+pub struct TilePatch {
     pub pixels: Vec<u8>,
+    pub original_tile: Tile,
+}
+
+#[derive(Clone)]
+pub struct TileResult {
+    pub pixels: Vec<Vec4>,
     pub original_tile: Tile,
 }
 
@@ -59,3 +64,12 @@ impl Iterator for TileGenerator {
         Some(tile)
     }
 }
+
+impl TilePatch {
+    pub fn from_tile_result(value: &TileResult, params: &DisplayParams) -> Self {
+        let original_tile = value.original_tile;
+        let pixels = to_srgb8(&resolve(&value.pixels), params);
+        Self { pixels , original_tile }
+    }
+}
+

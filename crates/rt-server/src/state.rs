@@ -10,7 +10,7 @@ use tokio::sync::{broadcast, mpsc};
 #[derive(Clone)]
 pub struct AppState {
     pub framebuffer: Arc<FrameBuffer>,
-    pub tx_stream: broadcast::Sender<rt_renderer::tiles::TileResult>,
+    pub tx_stream: broadcast::Sender<rt_renderer::tiles::TilePatch>,
     pub is_finished: Arc<std::sync::atomic::AtomicBool>,
     pub camera: Arc<RwLock<Arc<Camera>>>,
     pub world: Arc<RwLock<Arc<dyn Hittable + Send + Sync>>>,
@@ -20,9 +20,9 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn init_default(n_channels: usize, stride: usize, job_sender: mpsc::Sender<Job>) -> Self {
+    pub fn init_default(n_channels: usize, job_sender: mpsc::Sender<Job>) -> Self {
         let camera = Arc::new(Camera::default());
-        let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height, stride));
+        let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height));
         let (tx_stream, _) = broadcast::channel(n_channels);
         let is_finished = Arc::new(AtomicBool::new(true));
         let active_jobs_counter = Arc::new(AtomicUsize::new(0));

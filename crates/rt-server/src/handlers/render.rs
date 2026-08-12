@@ -1,7 +1,8 @@
 use std::sync::{Arc, atomic::Ordering};
 
 use axum::{Json, extract::State, http::StatusCode};
-use rt_renderer::{render::render_scene, tracers::PathTracer};
+use rt_core::display::DisplayParams;
+use rt_renderer::{render::render_scene, tiles::{TilePatch, TileResult}, tracers::PathTracer};
 
 use crate::{handlers::ErrorResponse, state::AppState};
 
@@ -62,10 +63,16 @@ pub async fn post_render(
     let fb_worker = Arc::clone(&state.framebuffer);
     let tx_worker = state.tx_stream.clone();
     let is_finished_worker = state.is_finished.clone();
+    let params = DisplayParams::default();
 
     let tracer = Arc::new(PathTracer {
         max_depth: payload.max_depth.unwrap_or(10),
     });
+
+    let on_tile = move |t: &TileResult| {
+        let patch = TilePatch::from_tile_result(t, &params);
+        let _ = tx_worker.send(patch);
+    };
 
     tokio::task::spawn_blocking(move || {
         println!("¡Motor de renderizado incializado!");
@@ -74,9 +81,8 @@ pub async fn post_render(
             camera,
             tracer,
             fb_worker,
-            tx_worker,
+            &on_tile,
             payload.tile_size.unwrap_or(128),
-            3,
             &*world,
             &background,
         );

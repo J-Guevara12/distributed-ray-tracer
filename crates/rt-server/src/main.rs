@@ -18,8 +18,7 @@ async fn main() {
         .with_span_events(FmtSpan::CLOSE)
         .init();
 
-    let stride = 3;
-    let state = AppState::init_default(100, stride, tx);
+    let state = AppState::init_default(100, tx);
 
     let app = setup_app(Router::new(), state);
 

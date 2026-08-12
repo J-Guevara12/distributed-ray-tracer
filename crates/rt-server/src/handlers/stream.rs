@@ -2,7 +2,8 @@ use std::convert::Infallible;
 
 use axum::{extract::State, response::{Sse, sse::Event}};
 use futures_util::Stream;
-use rt_renderer::tiles::{Tile, TileResult};
+use rt_core::display::{DisplayParams, resolve, to_srgb8};
+use rt_renderer::tiles::{Tile, TilePatch };
 
 use crate::state::AppState;
 
@@ -10,18 +11,24 @@ pub async fn render_stream_handler(State(state): State<AppState>) -> Sse<impl St
     let rx = state.tx_stream.subscribe();
 
     let current_snapshot = state.framebuffer.get_snapshot();
+    let params = DisplayParams::default();
+    let current_image = tokio::task::spawn_blocking(move || {
+        to_srgb8(&resolve(&current_snapshot), &params)
+    }).await.unwrap_or_default();
+
+
     let width = state.framebuffer.width;
     let height = state.framebuffer.height;
 
     let already_finished = state.is_finished.load(std::sync::atomic::Ordering::SeqCst);
 
-    let sse_stream = convert_to_sse_stream(rx, current_snapshot, width, height, already_finished).await;
+    let sse_stream = convert_to_sse_stream(rx, current_image, width, height, already_finished).await;
 
     Sse::new(sse_stream)
 }
 
 pub async fn convert_to_sse_stream(
-    mut rx: tokio::sync::broadcast::Receiver<TileResult>,
+    mut rx: tokio::sync::broadcast::Receiver<TilePatch>,
     initial_snapshot: Vec<u8>,
     width: u32,
     height: u32,
@@ -32,8 +39,7 @@ pub async fn convert_to_sse_stream(
         // Si el FrameBuffer ya contiene datos (no está completamente vacío con ceros),
         // simulamos un "Tile gigante" que cubre toda la pantalla para pintar el estado actual de golpe.
         if !initial_snapshot.iter().all(|&b| b == 0) {
-            let initial_tile = TileResult {
-                tile_id: 999999, // ID especial de inicialización
+            let initial_tile = TilePatch {
                 original_tile: Tile {
                     id: 999999,
                     x: 0,

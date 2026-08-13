@@ -70,10 +70,15 @@ COMMITS = [
     ("e80a41c", "head"),
 ]
 
-# Perfil `default` = lo que da cargo sin tocar nada. `optimized` = lto fat,
-# codegen-units 1 y target-cpu native. Medir ambos en cada commit convierte el
-# perfil de release en una variable controlada en lugar de un commit más.
-PROFILES = ["default", "optimized"]
+# El perfil hay que inyectarlo siempre: los commits viejos no traen
+# `[profile.release]` ni `.cargo/config.toml`, así que sin esto cada commit se
+# compilaría con flags distintos y la comparación no valdría.
+#
+# Solo se mide `optimized`. La barrida del 2026-08-13 midió también `default`
+# (lto/cu/target-cpu desactivados) y la diferencia salió ~0% incluso en las
+# filas de baja varianza — ese resultado ya está en history.jsonl. Se puede
+# reproducir con `--profiles default optimized`.
+PROFILES = ["optimized"]
 
 OPTIMIZED_PROFILE = """
 [profile.release]
@@ -84,6 +89,26 @@ codegen-units = 1
 OPTIMIZED_CARGO_CONFIG = """[build]
 rustflags = ["-C", "target-cpu=native"]
 """
+
+# `standalone` hardcodeaba el gradiente de cielo y descartaba el background que
+# declara la escena. Para B2 da igual (declara justo ese gradiente), pero para
+# un Cornell box es fatal: el frente está abierto, así que un cielo brillante
+# entra como segunda fuente de luz y la escena deja de ser "luz pequeña".
+#
+# Es la ÚNICA inyección de código de toda la barrida, y se permite porque:
+#   * la línea es byte-idéntica en los 6 commits, así que la sustitución es
+#     mecánica y no requiere resolver ningún conflicto;
+#   * no toca el bucle de render — cambia qué valor se pasa, no código que
+#     corra por rayo;
+#   * se aplica IGUAL en todos los commits, así que no sesga la comparación.
+# El driver verifica que haya exactamente una coincidencia antes de sustituir.
+BACKGROUND_HARDCODED = (
+    "let background = Background::new_gradient("
+    "Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));"
+)
+BACKGROUND_FROM_SCENE = "let background = scene_payload.background.clone();"
+
+STANDALONE_SRC = "crates/rt-renderer/src/bin/standalone.rs"
 
 
 @dataclass
@@ -186,6 +211,30 @@ def apply_profile(worktree: Path, profile: str) -> None:
             cargo_config.unlink()
 
 
+def patch_standalone(worktree: Path) -> bool:
+    """
+    Hace que `standalone` respete el background declarado por la escena.
+
+    Devuelve True si hubo que parchar, False si el commit ya lo hacía bien.
+    Lanza si encuentra algo inesperado, para no medir en silencio una escena
+    distinta de la que se pidió.
+    """
+    src = worktree / STANDALONE_SRC
+    text = src.read_text()
+
+    hits = text.count(BACKGROUND_HARDCODED)
+    if hits == 1:
+        src.write_text(text.replace(BACKGROUND_HARDCODED, BACKGROUND_FROM_SCENE))
+        return True
+    if hits == 0 and "scene_payload.background" in text:
+        return False  # el commit ya lee el background de la escena
+    raise RuntimeError(
+        f"{src}: se esperaba 1 coincidencia del background hardcodeado y se "
+        f"encontraron {hits}, sin que el archivo lea `scene_payload.background`. "
+        f"La barrida mediría una escena distinta de la declarada."
+    )
+
+
 def load_benchmarks(only: str | None) -> list[dict]:
     benchmarks = []
     for manifest in sorted((REPO / "scenes" / "bench").glob("*/bench.toml")):
@@ -238,6 +287,9 @@ def build_all(commits, profiles, keep_worktrees: bool) -> dict[tuple[str, str], 
         else:
             print(f"  creando worktree {sha} ({label})")
             git("worktree", "add", "--detach", str(worktree), sha)
+
+        patched = patch_standalone(worktree)
+        print(f"    background: {'parchado' if patched else 'ya correcto'}")
 
         for profile in profiles:
             dest = BIN_DIR / f"{label}-{profile}"
@@ -379,26 +431,41 @@ def main() -> int:
         },
         "dirty": dirty,
         "driver": Path(__file__).name,
+        # Única inyección de código de la barrida; queda registrada para que
+        # los resultados sean autoexplicativos.
+        "standalone_background_patch": True,
     }
 
     for bench in benchmarks:
         print(f"\n  {bench['id']} ({bench['name']}, {args.config})")
-        header = f"    {'commit':<18} " + "".join(f"{p:>14}" for p in args.profiles)
-        print(header)
-        for sha, label in COMMITS:
-            row = f"    {label:<18} "
-            for profile in args.profiles:
-                samples = [
-                    r.wall_ms for r in results
-                    if r.commit_label == label
-                    and r.profile == profile
-                    and r.benchmark == bench["id"]
-                ]
-                if samples:
-                    row += f"{statistics.median(samples):>9.0f} ms  "
-                else:
-                    row += f"{'—':>14}"
-            print(row)
+        print(f"    {'commit':<18}{'mediana':>10}{'spread':>9}{'vs anterior':>13}")
+        print(f"    {'-' * 48}")
+
+        previous = None
+        for _, label in COMMITS:
+            samples = [
+                r.wall_ms for r in results
+                if r.commit_label == label and r.benchmark == bench["id"]
+            ]
+            if not samples:
+                print(f"    {label:<18}{'—':>10}")
+                continue
+
+            median = statistics.median(samples)
+            # Spread relativo: si supera ~10% el dato no resuelve diferencias
+            # pequeñas y conviene subir la resolución o las repeticiones.
+            spread = (max(samples) - min(samples)) / median * 100
+            flag = " !" if spread > 10 else ""
+            change = f"×{previous / median:.2f}" if previous else ""
+            print(f"    {label:<18}{median:>7.0f} ms{spread:>8.1f}%{change:>13}{flag}")
+            previous = median
+
+        totals = [
+            r.wall_ms for r in results
+            if r.commit_label == COMMITS[0][1] and r.benchmark == bench["id"]
+        ]
+        if totals and previous:
+            print(f"    {'total':<18}{'':>19}{'×' + f'{statistics.median(totals) / previous:.2f}':>13}")
 
     BENCH_DIR.mkdir(exist_ok=True)
     with HISTORY.open("a") as fh:

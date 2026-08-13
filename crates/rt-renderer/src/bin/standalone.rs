@@ -1,6 +1,6 @@
 use std::{fs::File, sync::Arc, time::Instant};
 
-use rt_core::{Color, background::Background, display::DisplayParams, dto::ScenePayload};
+use rt_core::{display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{
     camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tiles::TileResult, tracers::PathTracer,
 };
@@ -25,7 +25,6 @@ pub fn main() {
 
     let ray_tracer = PathTracer::new(15);
     let instant = Instant::now();
-    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
 
     let on_tile = |_t: &TileResult| { };
 
@@ -36,7 +35,7 @@ pub fn main() {
         &on_tile,
         128,
         &world,
-        &background,
+        &scene_payload.background,
     );
     println!("Procesado en {} ms", instant.elapsed().as_millis());
     let display_params = DisplayParams::default();

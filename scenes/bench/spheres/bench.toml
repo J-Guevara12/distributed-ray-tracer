@@ -20,8 +20,8 @@ historial de commits, así que no debe cambiar nunca.
 
 # Config barata para regresión en CI y para barridas completas.
 [quick]
-width = 640
-spp   = 64
+width = 1920
+spp   = 20
 
 # Config para las figuras del reporte.
 # 250 spp es el valor con el que se midieron los 45 s pre-optimización.

@@ -1,0 +1,44 @@
+# Benchmark B1 — el benchmark de transporte de luz.
+#
+# Este archivo es la ÚNICA fuente de verdad de la carga de trabajo.
+# `camera.json` define solo el encuadre; su `image_width` y
+# `samples_per_pixel` son ignorados: el harness los sobreescribe.
+#
+# scene.json y camera.json son INMUTABLES. Si necesitas otros parámetros,
+# crea un benchmark nuevo (otra carpeta) en lugar de editar estos.
+#
+# Cajas ALINEADAS A EJES a propósito: el Cornell canónico las lleva rotadas,
+# pero el wrapper `Transform` (F0.13) no existe en los commits viejos y esta
+# escena tiene que poder correr en toda la barrida histórica. Solo usa quads,
+# esferas y materiales que existen desde junio. La variante con rotación será
+# B1b cuando caiga F0.13.
+
+id    = "B1"
+name  = "cornell-glass"
+notes = """
+Cornell box cerrado (555³) con dos cajas alineadas a ejes y una esfera de
+vidrio. Es el benchmark de TRANSPORTE DE LUZ, no de geometría: solo 19
+objetos, así que el costo del BVH es despreciable y el número refleja
+integrador y muestreador casi en estado puro.
+
+Discrimina en dos ejes que B2 no toca:
+  * Luz pequeña (130x105 sobre 555²) → sin NEE la varianza es enorme. Aquí es
+    donde F1.3 y F1.4 van a mostrar su valor.
+  * Caja CERRADA → casi ningún rayo escapa al fondo, así que los caminos
+    corren hasta max_depth. Es la escena donde la ruleta rusa (F0.9) debería
+    notarse más.
+  * Dieléctrico → ruido de cáusticas que no se va con más muestras ingenuas.
+
+Por la caja cerrada cada muestra cuesta bastante más que en B2; de ahí que
+`quick` use menos spp aunque el tiempo por corrida sea comparable.
+"""
+
+# 1024 con tile_size=128 da 8x8 = 64 tiles, suficiente para que los 24 hilos
+# se repartan trabajo y el wall time no lo defina un solo tile lento.
+[quick]
+width = 1024
+spp   = 8
+
+[full]
+width = 1024
+spp   = 200

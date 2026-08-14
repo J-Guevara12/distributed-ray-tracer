@@ -115,6 +115,12 @@ STANDALONE_SRC = "crates/rt-renderer/src/bin/standalone.rs"
 class Result:
     benchmark: str
     config: str
+    # La carga real, explícita. El nombre de la config NO basta: `quick` de B2
+    # fue 640/64 antes del 2026-08-13 y 1920/20 después, y agregar por
+    # (benchmark, config) mezclaría datos incomparables. Con estos dos campos
+    # el registro se explica solo sin tener que mirar el hash del manifiesto.
+    width: int
+    spp: int
     commit: str
     commit_label: str
     commit_subject: str
@@ -402,6 +408,8 @@ def main() -> int:
             results.append(Result(
                 benchmark=bench["id"],
                 config=args.config,
+                width=bench[args.config]["width"],
+                spp=bench[args.config]["spp"],
                 commit=full_sha[:12],
                 commit_label=label,
                 commit_subject=subject,
@@ -434,10 +442,17 @@ def main() -> int:
         # Única inyección de código de la barrida; queda registrada para que
         # los resultados sean autoexplicativos.
         "standalone_background_patch": True,
+        # `standalone` los tiene hardcodeados e idénticos en los 6 commits.
+        # `rt-bench` los va a hacer configurables, así que hay que dejar
+        # constancia de con cuáles se tomaron estas mediciones.
+        "max_depth": 15,
+        "tile_size": 128,
     }
 
     for bench in benchmarks:
-        print(f"\n  {bench['id']} ({bench['name']}, {args.config})")
+        cfg = bench[args.config]
+        print(f"\n  {bench['id']} ({bench['name']}, {args.config}: "
+              f"{cfg['width']}px / {cfg['spp']} spp)")
         print(f"    {'commit':<18}{'mediana':>10}{'spread':>9}{'vs anterior':>13}")
         print(f"    {'-' * 48}")
 

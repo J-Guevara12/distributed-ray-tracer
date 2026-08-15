@@ -1,18 +1,3 @@
-# Benchmark B1 — el benchmark de transporte de luz.
-#
-# Este archivo es la ÚNICA fuente de verdad de la carga de trabajo.
-# `camera.json` define solo el encuadre; su `image_width` y
-# `samples_per_pixel` son ignorados: el harness los sobreescribe.
-#
-# scene.json y camera.json son INMUTABLES. Si necesitas otros parámetros,
-# crea un benchmark nuevo (otra carpeta) en lugar de editar estos.
-#
-# Cajas ALINEADAS A EJES a propósito: el Cornell canónico las lleva rotadas,
-# pero el wrapper `Transform` (F0.13) no existe en los commits viejos y esta
-# escena tiene que poder correr en toda la barrida histórica. Solo usa quads,
-# esferas y materiales que existen desde junio. La variante con rotación será
-# B1b cuando caiga F0.13.
-
 id    = "B1"
 name  = "cornell-glass"
 notes = """
@@ -33,8 +18,6 @@ Por la caja cerrada cada muestra cuesta bastante más que en B2; de ahí que
 `quick` use menos spp aunque el tiempo por corrida sea comparable.
 """
 
-# 1024 con tile_size=128 da 8x8 = 64 tiles, suficiente para que los 24 hilos
-# se repartan trabajo y el wall time no lo defina un solo tile lento.
 [quick]
 width = 1024
 spp   = 8

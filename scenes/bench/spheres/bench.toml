@@ -1,14 +1,3 @@
-# Benchmark B2 — la escena de regresión histórica.
-#
-# Este archivo es la ÚNICA fuente de verdad de la carga de trabajo.
-# `camera.json` define solo el encuadre; su `image_width` y
-# `samples_per_pixel` son ignorados: el harness los sobreescribe con los
-# valores de la config elegida. Así editar `camera.json` no puede corromper
-# una medición.
-#
-# scene.json y camera.json son INMUTABLES. Si necesitas otros parámetros,
-# crea un benchmark nuevo (otra carpeta) en lugar de editar estos.
-
 id    = "B2"
 name  = "rtow-spheres"
 notes = """
@@ -18,13 +7,10 @@ profundidad de campo y geometría media. Es la escena que conecta con el
 historial de commits, así que no debe cambiar nunca.
 """
 
-# Config barata para regresión en CI y para barridas completas.
 [quick]
 width = 1920
 spp   = 20
 
-# Config para las figuras del reporte.
-# 250 spp es el valor con el que se midieron los 45 s pre-optimización.
 [full]
 width = 1920
 spp   = 250

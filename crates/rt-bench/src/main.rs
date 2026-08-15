@@ -1,9 +1,17 @@
+use std::process::ExitCode;
+
 use clap::Parser;
 
-mod manifest;
 mod cli;
+mod manifest;
 
-fn main() {
+fn main() -> ExitCode {
     let cli = cli::Cli::parse();
-    cli.match_command();
+
+    if let Err(err) = cli.match_command() {
+        eprintln!("error: {err:#}");
+        return ExitCode::FAILURE;
+    }
+
+    ExitCode::SUCCESS
 }

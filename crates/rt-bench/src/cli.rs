@@ -2,7 +2,7 @@ use std::path::Path;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::manifest::{self, BenchConfig, discover_benches, parse_bench_config};
+use crate::manifest::{self, discover_benches, parse_bench_config};
 
 #[derive(Parser)]
 #[command(name="Raytracer benchmark tool")]
@@ -46,7 +46,7 @@ pub enum Format {
 }
 
 impl Cli {
-    pub fn match_command(&self) {
+    pub fn match_command(&self) -> anyhow::Result<()> {
         match &self.command {
             Commands::List(args) => {
                 let base_dir = Path::new(&args.base_dir);
@@ -55,24 +55,25 @@ impl Cli {
 
                 let format = args.format;
 
-                let config_files = discover_benches(base_dir, file_name).unwrap();
-                let configs = parse_bench_config(config_files).unwrap();
+                let config_files = discover_benches(base_dir, file_name)?;
+                let configs = parse_bench_config(config_files)?;
 
                 match format {
                     Format::Text => {
                         for config in configs {
                             config.print_pretty(verbose);
                         }
-                    },
+                    }
                     Format::Json => {
-                        println!("{}", serde_json::to_string(&configs).unwrap());
+                        println!("{}", serde_json::to_string_pretty(&configs)?);
                     }
                     Format::Table => {
                         manifest::print_summary_table(&configs);
                     }
                 }
-            },
+            }
         }
 
+        Ok(())
     }
 }

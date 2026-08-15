@@ -4,15 +4,27 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use anyhow::{Context, bail};
+use rt_core::camera::CameraConfig;
+use rt_core::dto::ScenePayload;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct Benchmark {
+pub struct Manifest {
     pub id: String,
     pub name: String,
     pub notes: String,
     pub quick: Workload,
     pub full: Workload,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Benchmark {
+    pub path: PathBuf,
+    pub manifest: Manifest,
+    #[serde(skip_serializing)]
+    pub camera: CameraConfig,
+    #[serde(skip_serializing)]
+    pub scene: ScenePayload,
 }
 
 /// Carga de trabajo de una corrida.
@@ -29,6 +41,7 @@ struct Palette {
     cyan: &'static str,
     green: &'static str,
     gray: &'static str,
+    purple: &'static str,
 }
 
 impl Palette {
@@ -39,6 +52,7 @@ impl Palette {
         cyan: "",
         green: "",
         gray: "",
+        purple: "",
     };
 
     const ANSI: Palette = Palette {
@@ -48,13 +62,13 @@ impl Palette {
         cyan: "\x1b[36m",
         green: "\x1b[32m",
         gray: "\x1b[90m",
+        purple: "\x1b[35m",
     };
 }
 
 fn palette() -> &'static Palette {
     static PALETTE: OnceLock<Palette> = OnceLock::new();
     PALETTE.get_or_init(|| {
-        // NO_COLOR es la convención estándar para desactivar color por entorno.
         let colored = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
         if colored { Palette::ANSI } else { Palette::PLAIN }
     })
@@ -62,32 +76,59 @@ fn palette() -> &'static Palette {
 
 impl Benchmark {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
+        let original_path = path.to_path_buf();
         let content = fs::read_to_string(path)
             .with_context(|| format!("reading {}", path.display()))?;
 
-        toml::from_str(&content).with_context(|| format!("parsing {}", path.display()))
+        let manifest = toml::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
+
+        let path = path.with_file_name("camera.json");
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("reading {}", path.display()))?;
+
+        let camera = serde_json::de::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
+
+        let path = path.with_file_name("scene.json");
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("reading {}", path.display()))?;
+
+        let scene: ScenePayload = serde_json::de::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
+        let path = original_path;
+
+        Ok(Self{ path, manifest, camera, scene  })
     }
 
     pub fn print_pretty(&self, verbose: bool) {
         let p = palette();
+        let quick_height = (self.manifest.quick.width as f32 / self.camera.aspect_ratio) as i32;
+        let full_height = (self.manifest.full.width as f32 / self.camera.aspect_ratio) as i32;
 
         println!(
             "{}[{}]{} {}{}{}",
-            p.bold, self.id, p.reset, p.cyan, self.name, p.reset
+            p.bold, self.manifest.id, p.reset, p.cyan, self.manifest.name, p.reset
         );
 
         println!(
-            "  {} Quick profile:{} {}x{}px @ {}{} spp{}",
-            p.dim, p.reset, self.quick.width, self.quick.width, p.green, self.quick.spp, p.reset
+            "  {} Quick profile:{}   {}x{}px @ {}{} spp{}",
+            p.dim, p.reset, self.manifest.quick.width, quick_height, p.green, self.manifest.quick.spp, p.reset
         );
         println!(
-            "  {} Full profile: {} {}x{}px @ {}{} spp{}",
-            p.dim, p.reset, self.full.width, self.full.width, p.green, self.full.spp, p.reset
+            "  {} Full profile:{}    {}x{}px @ {}{} spp{}",
+            p.dim, p.reset, self.manifest.full.width, full_height, p.green, self.manifest.full.spp, p.reset
+        );
+        println!(
+            "  {} No. of Objects:{}  {}{}{}",
+            p.dim, p.reset, p.purple, self.scene.objects.len(), p.reset
+        );
+        println!(
+            "  {} No. of Materials:{} {}{}{}",
+            p.dim, p.reset, p.purple, self.scene.materials.len(), p.reset
         );
 
-        if verbose && !self.notes.trim().is_empty() {
+
+        if verbose && !self.manifest.notes.trim().is_empty() {
             println!("  {}Notes:{}", p.bold, p.reset);
-            for line in self.notes.trim().lines() {
+            for line in self.manifest.notes.trim().lines() {
                 println!("    {}{}{}", p.gray, line, p.reset);
             }
         }
@@ -138,28 +179,33 @@ pub fn parse_bench_config(files: Vec<PathBuf>) -> anyhow::Result<Vec<Benchmark>>
     files.iter().map(|file| Benchmark::load(file)).collect()
 }
 
+
 pub fn print_summary_table(benches: &[Benchmark]) {
     let p = palette();
 
     println!(
-        "{:<6} {:<20} {:<15} {:<15}",
-        "ID", "Nombre", "Quick (W/SPP)", "Full (W/SPP)"
+        "{}{:<6} {:<20} {:<25} {:<25} {:<15} {:<15}{}",
+        p.bold, "ID", "Nombre", "Quick (W/SPP)", "Full (W/SPP)", "No. Objects", "No. Materials", p.reset
     );
-    println!("{}", "=".repeat(60));
+    println!("{}{}{}", p.cyan, "=".repeat(109), p.reset);
 
     for bench in benches {
+        let quick_height = (bench.manifest.quick.width as f32 / bench.camera.aspect_ratio) as i32;
+        let full_height = (bench.manifest.full.width as f32 / bench.camera.aspect_ratio) as i32;
+
+        let manifest = &bench.manifest;
         let quick_str = format!(
             "{}x{} / {}spp",
-            bench.quick.width, bench.quick.width, bench.quick.spp
+            manifest.quick.width, quick_height, manifest.quick.spp
         );
         let full_str = format!(
             "{}x{} / {}spp",
-            bench.full.width, bench.full.width, bench.full.spp
+            manifest.full.width, full_height, manifest.full.spp
         );
 
         println!(
-            "{}{:<6}{} {:<20} {:<15} {:<15}",
-            p.bold, bench.id, p.reset, bench.name, quick_str, full_str
+            "{}{:<6}{} {:<20} {:<25} {:<25} {:<15} {:<15}",
+            p.bold, manifest.id, p.reset, manifest.name, quick_str, full_str, bench.scene.objects.len(), bench.scene.materials.len()
         );
     }
 }

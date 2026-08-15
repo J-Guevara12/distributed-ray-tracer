@@ -41,7 +41,7 @@ pub enum Format {
     Text,
     /// Table (verbose uncompatible)
     Table,
-    /// JSON
+    /// JSON (verbose uncompatible)
     Json,
 }
 
@@ -65,7 +65,7 @@ impl Cli {
                         }
                     }
                     Format::Json => {
-                        println!("{}", serde_json::to_string_pretty(&configs)?);
+                        println!("{}", serde_json::to_string(&configs)?);
                     }
                     Format::Table => {
                         manifest::print_summary_table(&configs);

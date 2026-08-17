@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::bail;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::manifest::{self, WorkloadKind, discover_benches, parse_bench_config};
+use crate::manifest::{self, Benchmark, WorkloadKind, discover_benches, parse_bench_config};
 use crate::runner::{self, RunOptions};
 
 #[derive(Parser)]
@@ -36,9 +36,9 @@ pub struct RunArgs {
     /// Workload to measure
     #[arg(long, value_enum, default_value_t=WorkloadKind::Quick)]
     pub config: WorkloadKind,
-    /// Measure only this benchmark (id or name)
-    #[arg(long)]
-    pub only: Option<String>,
+    /// Measure only these benchmarks, by id or name: --only B1 B2 / --only B1,B2
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub only: Vec<String>,
     #[arg(long, default_value_t=5)]
     pub reps: usize,
     /// Seconds between runs, to let the CPU settle
@@ -120,11 +120,30 @@ impl Cli {
                 let config_files = discover_benches(base_dir, &args.file_name)?;
                 let mut benches = parse_bench_config(config_files)?;
 
-                if let Some(only) = &args.only {
-                    benches.retain(|b| &b.manifest.id == only || &b.manifest.name == only);
-                    if benches.is_empty() {
-                        bail!("no benchmark matches {only:?}");
+                if !args.only.is_empty() {
+                    let matches = |sel: &String, b: &Benchmark| {
+                        &b.manifest.id == sel || &b.manifest.name == sel
+                    };
+
+                    let unknown: Vec<&String> = args
+                        .only
+                        .iter()
+                        .filter(|sel| !benches.iter().any(|b| matches(sel, b)))
+                        .collect();
+
+                    if !unknown.is_empty() {
+                        let available: Vec<&str> = benches
+                            .iter()
+                            .map(|b| b.manifest.id.as_str())
+                            .collect();
+                        bail!(
+                            "unknown benchmark(s): {}. available: {}",
+                            unknown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+                            available.join(", ")
+                        );
                     }
+
+                    benches.retain(|b| args.only.iter().any(|sel| matches(sel, b)));
                 }
 
                 let opts = RunOptions {

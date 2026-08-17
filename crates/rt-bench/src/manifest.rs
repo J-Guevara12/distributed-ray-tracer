@@ -34,6 +34,21 @@ pub struct Workload {
     pub spp: u32,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, clap::ValueEnum)]
+pub enum WorkloadKind {
+    Quick,
+    Full,
+}
+
+impl WorkloadKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            WorkloadKind::Quick => "quick",
+            WorkloadKind::Full => "full",
+        }
+    }
+}
+
 struct Palette {
     reset: &'static str,
     bold: &'static str,
@@ -75,6 +90,25 @@ fn palette() -> &'static Palette {
 }
 
 impl Benchmark {
+    pub fn scene_path(&self) -> PathBuf {
+        self.path.with_file_name("scene.json")
+    }
+
+    pub fn camera_path(&self) -> PathBuf {
+        self.path.with_file_name("camera.json")
+    }
+
+    pub fn workload(&self, kind: WorkloadKind) -> &Workload {
+        match kind {
+            WorkloadKind::Quick => &self.manifest.quick,
+            WorkloadKind::Full => &self.manifest.full,
+        }
+    }
+
+    pub fn height(&self, width: u32) -> u32 {
+        (width as f32 / self.camera.aspect_ratio) as u32
+    }
+
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let original_path = path.to_path_buf();
         let content = fs::read_to_string(path)

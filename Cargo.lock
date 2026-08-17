@@ -2319,6 +2319,7 @@ name = "rt-bench"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "rt-core",
  "rt-renderer",

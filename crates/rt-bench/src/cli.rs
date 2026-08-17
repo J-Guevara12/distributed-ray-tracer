@@ -1,8 +1,11 @@
 use std::path::Path;
+use std::time::Duration;
 
+use anyhow::bail;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::manifest::{self, discover_benches, parse_bench_config};
+use crate::manifest::{self, WorkloadKind, discover_benches, parse_bench_config};
+use crate::runner::{self, RunOptions};
 
 #[derive(Parser)]
 #[command(name="Raytracer benchmark tool")]
@@ -18,6 +21,45 @@ pub struct Cli {
 pub enum Commands {
     /// Lists all the available benchmarks
     List (ListArgs),
+    /// Measures the current build against the benchmark suite
+    Run (RunArgs),
+}
+
+#[derive(Args)]
+pub struct RunArgs {
+    #[arg(default_value_t="./scenes/bench".to_string())]
+    #[arg(short, long)]
+    pub base_dir: String,
+    #[arg(default_value_t="bench.toml".to_string())]
+    #[arg(short, long)]
+    pub file_name: String,
+    /// Workload to measure
+    #[arg(long, value_enum, default_value_t=WorkloadKind::Quick)]
+    pub config: WorkloadKind,
+    /// Measure only this benchmark (id or name)
+    #[arg(long)]
+    pub only: Option<String>,
+    #[arg(long, default_value_t=5)]
+    pub reps: usize,
+    /// Seconds between runs, to let the CPU settle
+    #[arg(long, default_value_t=20)]
+    pub cooldown: u64,
+    /// Defaults to the short HEAD sha, or "workdir" when the tree is dirty
+    #[arg(long)]
+    pub label: Option<String>,
+    /// Defaults match the values hardcoded in `standalone`, which is what the
+    /// historical sweep measured — changing them breaks comparability.
+    #[arg(long, default_value_t=15)]
+    pub max_depth: u32,
+    #[arg(long, default_value_t=128)]
+    pub tile_size: u32,
+    #[arg(long, default_value_t="./bench/history.jsonl".to_string())]
+    pub out: String,
+    /// Measure and print without writing to the history file
+    #[arg(long)]
+    pub no_record: bool,
+    #[arg(long)]
+    pub allow_dirty: bool,
 }
 #[derive(Args)]
 pub struct ListArgs {
@@ -71,6 +113,32 @@ impl Cli {
                         manifest::print_summary_table(&configs);
                     }
                 }
+            }
+
+            Commands::Run(args) => {
+                let base_dir = Path::new(&args.base_dir);
+                let config_files = discover_benches(base_dir, &args.file_name)?;
+                let mut benches = parse_bench_config(config_files)?;
+
+                if let Some(only) = &args.only {
+                    benches.retain(|b| &b.manifest.id == only || &b.manifest.name == only);
+                    if benches.is_empty() {
+                        bail!("no benchmark matches {only:?}");
+                    }
+                }
+
+                let opts = RunOptions {
+                    kind: args.config,
+                    reps: args.reps,
+                    cooldown: Duration::from_secs(args.cooldown),
+                    label: args.label.clone(),
+                    max_depth: args.max_depth,
+                    tile_size: args.tile_size,
+                    out: (!args.no_record).then(|| args.out.clone()),
+                    allow_dirty: args.allow_dirty,
+                };
+
+                runner::run(&benches, &opts)?;
             }
         }
 

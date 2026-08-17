@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 clap = { version = "4.6.6", features = ["cargo", "derive"] }
 rt-core = { version = "0.1.0", path = "../rt-core" }
 rt-renderer = { version = "0.1.0", path = "../rt-renderer" }

@@ -32,6 +32,7 @@ struct Timing {
     rays: u64,
     samples: u64,
     tile_ms: Vec<f64>,
+    image_hash: String,
 }
 
 impl Timing {
@@ -64,6 +65,7 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
     let (width, height) = (camera.width, camera.height);
 
     let framebuffer = Arc::new(FrameBuffer::new(width, height));
+    let snapshot_source = Arc::clone(&framebuffer);
     let tracer = Arc::new(PathTracer::new(opts.max_depth));
     let on_tile = |_: &TileResult| {};
 
@@ -84,6 +86,7 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
         rays: stats.rays,
         samples: width as u64 * height as u64 * workload.spp as u64,
         tile_ms: stats.tile_ms,
+        image_hash: env::image_sha(&snapshot_source.get_snapshot()),
     }
 }
 
@@ -172,7 +175,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 samples_per_sec: Some(timing.samples_per_sec()),
                 node_visits: None,
                 prim_tests: None,
-                image_hash: None,
+                image_hash: Some(timing.image_hash.clone()),
                 mse: None,
                 cpu_mhz: mhz,
                 timestamp: timestamp.clone(),
@@ -183,6 +186,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
         }
     }
 
+    check_determinism(benches, &records);
     print_summary(benches, &records, opts);
 
     match &opts.out {
@@ -197,14 +201,40 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// El hash de la imagen debe ser idéntico entre repeticiones. Si no lo es,
+/// queda algo no determinista y cualquier medición fina es sospechosa.
+fn check_determinism(benches: &[Benchmark], records: &[Record]) {
+    for bench in benches {
+        let hashes: Vec<&str> = records
+            .iter()
+            .filter(|r| r.benchmark == bench.manifest.id)
+            .filter_map(|r| r.image_hash.as_deref())
+            .collect();
+
+        let Some(first) = hashes.first() else { continue };
+        if hashes.iter().any(|h| h != first) {
+            let mut distinct: Vec<&&str> = hashes.iter().collect();
+            distinct.sort_unstable();
+            distinct.dedup();
+            println!(
+                "\nWARNING: {} produjo {} imágenes distintas en {} repeticiones \
+                 — el render no es determinista",
+                bench.manifest.id,
+                distinct.len(),
+                hashes.len()
+            );
+        }
+    }
+}
+
 fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
     println!("\n== summary ==");
     println!(
-        "  {:<5} {:<15} {:>11} {:>5} {:>10} {:>6} {:>3} {:>8} {:>8} {:>7} {:>6}",
+        "  {:<5} {:<15} {:>11} {:>5} {:>10} {:>6} {:>3} {:>8} {:>8} {:>7} {:>6} {:>10}",
         "ID", "name", "resolution", "spp", "render", "rsd", "n", "Mray/s", "Msmp/s", "ray/smp",
-        "imbal"
+        "imbal", "image"
     );
-    println!("  {}", "-".repeat(100));
+    println!("  {}", "-".repeat(111));
 
     for bench in benches {
         let id = &bench.manifest.id;
@@ -238,7 +268,7 @@ fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
         let imbalance = of(|r| r.tiles.as_ref().map(|t| t.imbalance));
 
         println!(
-            "  {:<5} {:<15} {:>11} {:>5} {:>7.0} ms {:>5.1}% {:>3} {:>8.2} {:>8.2} {:>7.2} {:>6.2}",
+            "  {:<5} {:<15} {:>11} {:>5} {:>7.0} ms {:>5.1}% {:>3} {:>8.2} {:>8.2} {:>7.2} {:>6.2} {:>10}",
             id,
             bench.manifest.name,
             format!("{}x{}", workload.width, bench.height(workload.width)),
@@ -250,6 +280,12 @@ fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
             stats(&msmp).median,
             stats(&per_sample).median,
             stats(&imbalance).median,
+            records
+                .iter()
+                .find(|r| &r.benchmark == id)
+                .and_then(|r| r.image_hash.as_deref())
+                .map(|h| &h[..8])
+                .unwrap_or("-"),
         );
     }
 }

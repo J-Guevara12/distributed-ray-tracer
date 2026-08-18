@@ -7,6 +7,8 @@ use anyhow::{Context, bail};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use rt_core::Vec4;
+
 use crate::manifest::Benchmark;
 
 #[derive(Serialize, Clone)]
@@ -111,6 +113,26 @@ pub fn cpu_mhz() -> Option<f64> {
     }
 
     (count > 0).then(|| (sum / count as f64 * 10.0).round() / 10.0)
+}
+
+/// Hash del acumulador crudo, no del PNG: la cuantización a u8 esconde
+/// diferencias pequeñas y este campo existe para detectarlas.
+pub fn image_sha(buf: &[Vec4]) -> String {
+    let mut hasher = Sha256::new();
+    let mut chunk: Vec<u8> = Vec::with_capacity(4096 * 16);
+
+    for pixel in buf {
+        for component in [pixel.x, pixel.y, pixel.z, pixel.w] {
+            chunk.extend_from_slice(&component.to_le_bytes());
+        }
+        if chunk.len() >= 4096 * 16 {
+            hasher.update(&chunk);
+            chunk.clear();
+        }
+    }
+    hasher.update(&chunk);
+
+    hex16(&hasher.finalize())
 }
 
 fn file_sha(path: &Path) -> anyhow::Result<String> {

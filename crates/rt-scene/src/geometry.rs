@@ -76,7 +76,7 @@ impl Hittable for Sphere {
         let y = Interval::new(self.center[1]-self.radius, self.center[1]+self.radius);
         let z = Interval::new(self.center[2]-self.radius, self.center[2]+self.radius);
 
-        return Aabb { x, y, z }
+        Aabb { x, y, z }
     }
 }
 

@@ -51,7 +51,23 @@ def load():
     """Agrupa por la carga real, no por el hash del bench.toml: ese cambia con
     cualquier edición del archivo aunque la carga sea la misma."""
     names = bench_names()
-    rows = [json.loads(line) for line in HISTORY.open() if line.strip()]
+    rows, bad = [], []
+
+    for number, line in enumerate(HISTORY.open(), start=1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+            record["env"]["scene_hashes"]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            bad.append(number)
+            continue
+        rows.append(record)
+
+    if bad:
+        print(f"aviso: {len(bad)} líneas ilegibles en history.jsonl "
+              f"(líneas {', '.join(map(str, bad[:5]))}...)", file=sys.stderr)
+
     unknown = set()
 
     for r in rows:

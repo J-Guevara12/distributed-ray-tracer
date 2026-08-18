@@ -63,8 +63,16 @@ pub fn head_commit() -> anyhow::Result<Commit> {
     })
 }
 
+/// Ignora `bench/`: el guard existe para garantizar que el código medido
+/// corresponde al commit, y correr un benchmark modifica `history.jsonl`, que
+/// dejaría sucio el árbol para la corrida siguiente.
 pub fn is_dirty() -> anyhow::Result<bool> {
-    Ok(!git(&["status", "--porcelain"])?.is_empty())
+    let status = git(&["status", "--porcelain"])?;
+
+    Ok(status.lines().any(|line| {
+        let path = line.get(3..).unwrap_or("").trim_matches('"');
+        !path.starts_with("bench/")
+    }))
 }
 
 fn rustc_version() -> String {

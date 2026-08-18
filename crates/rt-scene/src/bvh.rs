@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use rt_core::Interval;
+use rt_core::{Interval, Vec3};
 
 use crate::{Hittable, aabb::Aabb};
 
@@ -10,9 +10,37 @@ pub struct BvhNode {
     bbox: Aabb
 }
 
+fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> u32 {
+    let mut low = Vec3::splat(f32::INFINITY);
+    let mut high = Vec3::splat(f32::NEG_INFINITY);
+
+    for object in objects {
+        let aabb = object.bounding_box();
+
+        let c = Vec3::new(
+            0.5 * (aabb.x.min + aabb.x.max),
+            0.5 * (aabb.y.min + aabb.y.max),
+            0.5 * (aabb.z.min + aabb.z.max)
+        );
+
+        low = low.min(c);
+        high = high.max(c);
+    }
+    let extent = high - low;
+    
+
+    if extent.x >= extent.y && extent.x >= extent.z {
+        0
+    } else if extent.y >= extent.z {
+        1
+    } else {
+        2
+    }
+}
+
 impl BvhNode {
     pub fn new(mut objects: Vec<Arc<dyn Hittable>>) -> Self {
-        let axis = fastrand::i32(0..3);
+        let axis = longest_axis(&objects);
 
         let comparator = |a: &Arc<dyn Hittable>, b: &Arc<dyn Hittable>| {
             let box_a = a.bounding_box();
@@ -71,9 +99,9 @@ impl Hittable for BvhNode {
 
         let hit_right = self.right.hit(ray, Interval::new(ray_t.min, current_max));
         if hit_right.is_some() {
-            return hit_right
+            hit_right
         } else {
-            return hit_left
+            hit_left
         }
     }
 

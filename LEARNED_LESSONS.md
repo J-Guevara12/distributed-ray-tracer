@@ -1,0 +1,169 @@
+# Lecciones aprendidas
+
+Errores que ya cometimos y hallazgos que costaron caro. Si algo del código o del
+plan parece arbitrario, la razón probablemente está acá.
+
+---
+
+## Medición
+
+### `rt-bench` no compila; `bench_sweep.py` sí
+
+`rt-bench` mide el binario que está en `target/release/`, no el árbol de trabajo.
+El driver de la barrida es el que crea un worktree y compila cada commit.
+
+Confundirlos costó una tanda completa de mediciones de F0.7: los números tenían
+la etiqueta nueva y el código viejo. El ciclo es siempre
+**implementar → commitear → `cargo build --release` → medir**.
+
+### Una medición contaminada lleva a una conclusión invertida
+
+Al diagnosticar la regresión de F0.7 medimos una variante con la máquina cargada
+(rsd 28.8%, justo después de un build) y concluimos que la clave de ordenamiento
+no era la causa. Era la causa **entera**: 4087 ms contra 2492 ms.
+
+Si la dispersión de una corrida es alta, no se concluye nada de ella. Se repite.
+
+### No medir con la máquina caliente ni cargada
+
+Es un portátil con núcleos híbridos P/E y throttling térmico. Tras una hora de
+builds y benchmarks, las dos escenas midieron ~1.6× peor que *cualquier*
+variante — por debajo incluso de la versión rota. El síntoma es que `Mray/s`
+cae por debajo de todo lo medido antes.
+
+Cooldown de 20 s por defecto. Bajarlo a 5 s subió la rsd de B2 de 3.6% a 6.5%.
+
+### El rango min-max no compara entre corridas con distinto `n`
+
+El rango de 3 muestras es sistemáticamente menor que el de 5. Comparar un
+"±31% de rango" con un "14% de rsd" es inválido, y por eso creímos un rato que
+la varianza no había bajado cuando sí.
+
+Usar desviación estándar relativa e imprimir siempre el `n`.
+
+### Alternar variantes, no agrupar
+
+Todas las repeticiones de A y después todas las de B hace que B parezca más
+lento por termodinámica. El A/B que resolvió la regresión de F0.7 solo fue
+concluyente al alternar los binarios en la misma sesión.
+
+### `quick` y `full` no miden la misma mezcla
+
+El mismo arreglo dio **+19% en `quick` (20 spp) y +6.6% en `full` (250 spp)**. A
+más muestras los rayos secundarios incoherentes pesan más y la calidad del árbol
+pesa relativamente menos.
+
+`quick` sirve para detectar la dirección del cambio, no para predecir su
+magnitud en `full`.
+
+### `rays/s` no es una constante de hardware
+
+Es por escena. Un "rayo" es una consulta de intersección, y su costo depende de
+la profundidad del BVH, del tipo de primitiva y de si la escena cabe en caché.
+B1 saca 53 Mray/s y B2 37 Mray/s con el mismo binario.
+
+Solo es comparable **longitudinalmente dentro de una escena**. Y `samples/s` y
+`rays/s` pueden moverse en direcciones opuestas: la ruleta rusa sube el primero
+sin tocar el segundo, y NEE hace lo contrario.
+
+---
+
+## Rendimiento
+
+### El renderer está limitado por latencia de memoria, no por cómputo
+
+`lto="fat"` + `codegen-units=1` + `target-cpu=native` dieron **×1.00** medido en
+6 commits. La causa probable: punteros `Arc<dyn Hittable>` dispersos en el heap
+con una llamada virtual por nodo. Mejor codegen no ayuda a un bucle que espera
+la caché.
+
+Consecuencia: el BVH plano con primitivas contiguas vale más que optimizar la
+aritmética del slab test.
+
+### El BVH cuesta ~7% en escenas pequeñas
+
+En B1 (19 objetos) el barrido lineal de `HittableList` gana al BVH: 22.5 s
+contra 24.2 s, sin solaparse. Ese ×0.93 es el costo puro de la indirección.
+
+### `longest_axis` sobre extent de centroides se rompe con outliers de escala
+
+La esfera del piso de B2 (`r=1000`, centro `y=-1000`) infla el extent de Y a
+1001 contra 21.87 de X y Z, así que el heurístico elige **Y en la raíz siempre**
+— y Y es el eje que no separa nada, porque las 517 esferas pequeñas están todas
+apoyadas en el suelo.
+
+Es una estructura de escena muy común (piso, terreno, skybox), no una rareza.
+**Sponza en F2 la tiene.**
+
+### Ordenar por centroide en un eje degenerado es ordenar por otra cosa
+
+Las esferas pequeñas de B2 cumplen `center.y ≈ radius`, así que ordenar por
+centroide en Y **equivale a ordenar por radio**: intercala esferas de todo el
+plano XZ y el corte por mediana queda espacialmente sin sentido. Cuesta 33%.
+
+`bbox.min` funciona mejor **por accidente**: empata (45 valores distintos contra
+473), el sort estable conserva el orden del archivo, y ese orden viene de los
+bucles del generador, o sea que es espacialmente coherente. En B1 `bbox.min` es
+de hecho 2% *peor* que centroide.
+
+Ninguna clave de orden es buena universalmente. El arreglo de fondo es SAH
+binned sobre posiciones de corte, que no depende de la clave.
+
+### Contadores atómicos en el bucle caliente cuestan 30–40×
+
+Un `fetch_add(1, Relaxed)` por nodo visitado, desde 24 hilos sobre la misma
+línea de caché, llevó B2 de 3 s a **114 s**. Fueron ~1.9 mil millones de
+incrementos contendiendo.
+
+Los contadores van locales por hilo y se fusionan al final, como hace
+`RayStats`. Nunca atómicos compartidos.
+
+### El no determinismo aparece como ruido de medición Y como tests intermitentes
+
+`BvhNode` elegía el eje de corte con `fastrand`, sembrado por proceso, así que
+cada corrida construía un árbol distinto. Se manifestó en dos lados:
+
+* dispersión de 7–9% que impedía atribuir cambios menores;
+* `test_bvh_traversal_hit_and_short_circuit` fallando ~40% de las corridas.
+
+Al volverlo determinista, la dispersión cayó a **2.0–2.3%**.
+
+---
+
+## Higiene de datos
+
+### El SHA es el único campo verificable
+
+`commit_label` lo escribe el usuario y nadie lo comprueba. Por eso dos estados
+de código no pueden compartir commit: medir dos variantes con `--allow-dirty` y
+el mismo SHA deja el dataset sin forma de distinguirlas.
+
+### Editar un `bench.toml` cambia su hash y rompe el agrupamiento
+
+Aunque el cambio sea solo comentarios. Por eso el script de gráficas agrupa por
+la **carga real** (`scene_hash`, `camera_hash`, `width`, `spp`) y no por el hash
+del manifiesto, con una tabla histórica para los registros anteriores a que
+`width`/`spp` estuvieran en el registro.
+
+### Las escenas de benchmark son inmutables
+
+`bench.toml` es la única fuente de verdad de la carga; `camera.json` guarda solo
+el encuadre y sus `image_width`/`samples_per_pixel` se sobreescriben siempre.
+Para otros parámetros, carpeta nueva.
+
+Ya pasó: el `quick` de B2 fue 640/64 antes del 2026-08-13 y 1920/20 después, y
+sin `width`/`spp` en el registro los dos grupos eran indistinguibles.
+
+---
+
+## Tests
+
+### Un test que pasa por suerte de ordenamiento es peor que ningún test
+
+`MockHittable` devolvía un `t` fijo de `1.0` sin importar la distancia. El BVH
+recorta el intervalo del hijo derecho con el `t` del izquierdo, así que con un
+`t` constante el árbol descartaba impactos válidos según qué eje aleatorio le
+tocara — y el test solo pasaba cuando el orden salía favorable.
+
+Un mock tiene que respetar los invariantes que el código bajo prueba usa. Aquí,
+derivar `t` del punto de impacto.

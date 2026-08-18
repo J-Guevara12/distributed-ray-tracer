@@ -31,10 +31,14 @@ impl Hittable for MockHittable {
         if let Some(p) = self.hit_point {
             if self.bbox.hit(*ray, ray_t) {
                 static MAT: MockMaterial = MockMaterial;
-                // Simulamos un HitRecord simple en el punto configurado
+                // El `t` tiene que corresponder al punto de impacto: el BVH
+                // recorta el intervalo del hijo derecho con él, así que un `t`
+                // fijo haría que el árbol descartara impactos válidos según
+                // qué eje de corte le tocara al azar.
+                let t = (p - ray.origin).dot(ray.direction);
                 return Some(HitRecord::new(
                     ray,
-                    1.0, // t arbitrario que caiga en el intervalo usual
+                    t,
                     Vec3::new(0.0, 0.0, 1.0),
                     p,
                     &MAT,

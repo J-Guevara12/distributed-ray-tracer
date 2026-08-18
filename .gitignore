@@ -2,4 +2,6 @@ target/
 *.png
 bench/bin/
 bench/stage/
-**/__pycache__/**
+bench/plots/
+bench/.venv/
+scripts/__pycache__/*

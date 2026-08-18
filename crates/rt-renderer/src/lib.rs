@@ -1,3 +1,4 @@
+pub mod stats;
 pub mod tiles;
 pub mod framebuffer;
 pub mod render;

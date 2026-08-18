@@ -1,16 +1,31 @@
 use rt_core::{Color, Interval, Ray, background::Background};
 use rt_scene::Hittable;
 
+use crate::stats::RayStats;
+
 pub trait RayTracer: Send + Sync + 'static {
-    fn trace_ray(&self, ray: Ray, world: &dyn Hittable, background: &Background) -> Color;
+    fn trace_ray(
+        &self,
+        ray: Ray,
+        world: &dyn Hittable,
+        background: &Background,
+        stats: &mut RayStats,
+    ) -> Color;
 }
 
 pub struct NormalTracer {}
 
 impl RayTracer for NormalTracer {
-    fn trace_ray(&self, ray: Ray, world: &dyn Hittable, background: &Background) -> Color {
+    fn trace_ray(
+        &self,
+        ray: Ray,
+        world: &dyn Hittable,
+        background: &Background,
+        stats: &mut RayStats,
+    ) -> Color {
         let interval = Interval::new(0.0, f32::INFINITY);
 
+        stats.rays += 1;
         if let Some(rec) = world.hit(&ray, interval) {
             // Las mapeamos linealmente a [0.0, 1.0] para convertirlas en color.
             let r = 0.5 * (rec.normal.x + 1.0);
@@ -34,7 +49,13 @@ impl PathTracer {
 }
 
 impl RayTracer for PathTracer {
-    fn trace_ray(&self, ray: Ray, world: &dyn Hittable, background: &Background) -> Color {
+    fn trace_ray(
+        &self,
+        ray: Ray,
+        world: &dyn Hittable,
+        background: &Background,
+        stats: &mut RayStats,
+    ) -> Color {
         let mut current_ray = ray;
 
         let mut attenuation = Color::ONE;
@@ -44,6 +65,7 @@ impl RayTracer for PathTracer {
         for _ in 0..self.max_depth {
             let interval = Interval::new(0.001, f32::INFINITY);
 
+            stats.rays += 1;
             if let Some(rec) = world.hit(&current_ray, interval) {
                 let emitted = rec.material.emitted(rec.normal[0], rec.normal[0], rec.p);
                 accumulated_light += attenuation * emitted;

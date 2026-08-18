@@ -7,14 +7,12 @@ use serde::Serialize;
 
 use crate::env::Env;
 
-/// Orden de campos y nombres calcados de `bench_sweep.py`: ambos drivers
-/// escriben en el mismo `history.jsonl`, así que el esquema solo admite
-/// campos nuevos, nunca renombrados.
 #[derive(Serialize)]
 pub struct Record {
     pub benchmark: String,
     pub config: String,
     pub width: u32,
+    pub height: u32,
     pub spp: u32,
     pub commit: String,
     pub commit_label: String,
@@ -25,6 +23,8 @@ pub struct Record {
     pub wall_ms: u128,
     pub rays: Option<u64>,
     pub rays_per_sec: Option<f64>,
+    pub samples: Option<u64>,
+    pub samples_per_sec: Option<f64>,
     pub node_visits: Option<u64>,
     pub prim_tests: Option<u64>,
     pub image_hash: Option<String>,
@@ -32,7 +32,42 @@ pub struct Record {
     pub cpu_mhz: Option<f64>,
     pub timestamp: String,
     pub build_ms: Option<f64>,
+    pub tiles: Option<TileSummary>,
     pub env: Env,
+}
+
+#[derive(Serialize, Clone)]
+pub struct TileSummary {
+    pub count: usize,
+    pub min_ms: f64,
+    pub median_ms: f64,
+    pub p95_ms: f64,
+    pub max_ms: f64,
+    pub imbalance: f64,
+}
+
+impl TileSummary {
+    pub fn new(tile_ms: &[f64]) -> Option<Self> {
+        if tile_ms.is_empty() {
+            return None;
+        }
+
+        let mut sorted = tile_ms.to_vec();
+        sorted.sort_by(f64::total_cmp);
+
+        let n = sorted.len();
+        let mean = sorted.iter().sum::<f64>() / n as f64;
+        let max = sorted[n - 1];
+
+        Some(Self {
+            count: n,
+            min_ms: sorted[0],
+            median_ms: stats(&sorted).median,
+            p95_ms: sorted[(((n - 1) as f64) * 0.95).round() as usize],
+            max_ms: max,
+            imbalance: if mean > 0.0 { (max - mean) / mean } else { 0.0 },
+        })
+    }
 }
 
 pub struct Stats {
@@ -41,9 +76,6 @@ pub struct Stats {
     pub n: usize,
 }
 
-/// Desviación estándar relativa, no rango min-max: el rango de 3 muestras es
-/// sistemáticamente menor que el de 5, así que no compara entre corridas con
-/// distinto número de reps.
 pub fn stats(samples: &[f64]) -> Stats {
     let n = samples.len();
     let mut sorted = samples.to_vec();

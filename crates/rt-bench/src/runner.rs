@@ -13,7 +13,7 @@ use rt_scene::hittable_list::HittableList;
 
 use crate::env;
 use crate::manifest::{Benchmark, WorkloadKind};
-use crate::report::{self, Record, Stats, stats};
+use crate::report::{self, Record, Stats, TileSummary, stats};
 
 pub struct RunOptions {
     pub kind: WorkloadKind,
@@ -29,6 +29,23 @@ pub struct RunOptions {
 struct Timing {
     build_ms: f64,
     wall_ms: u128,
+    rays: u64,
+    samples: u64,
+    tile_ms: Vec<f64>,
+}
+
+impl Timing {
+    fn secs(&self) -> f64 {
+        self.wall_ms as f64 / 1000.0
+    }
+
+    fn rays_per_sec(&self) -> f64 {
+        if self.wall_ms == 0 { 0.0 } else { self.rays as f64 / self.secs() }
+    }
+
+    fn samples_per_sec(&self) -> f64 {
+        if self.wall_ms == 0 { 0.0 } else { self.samples as f64 / self.secs() }
+    }
 }
 
 fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
@@ -44,12 +61,14 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
     let world = BvhNode::new(list.objects);
     let build_ms = build_start.elapsed().as_secs_f64() * 1000.0;
 
-    let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height));
+    let (width, height) = (camera.width, camera.height);
+
+    let framebuffer = Arc::new(FrameBuffer::new(width, height));
     let tracer = Arc::new(PathTracer::new(opts.max_depth));
     let on_tile = |_: &TileResult| {};
 
     let render_start = Instant::now();
-    render_scene(
+    let stats = render_scene(
         Arc::new(camera),
         tracer,
         framebuffer,
@@ -62,6 +81,9 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
     Timing {
         build_ms,
         wall_ms: render_start.elapsed().as_millis(),
+        rays: stats.rays,
+        samples: width as u64 * height as u64 * workload.spp as u64,
+        tile_ms: stats.tile_ms,
     }
 }
 
@@ -122,9 +144,11 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
             let workload = bench.workload(opts.kind);
 
             println!(
-                "  [rep {rep}] {} {} ms (build {:.2} ms){}",
+                "  [rep {rep}] {} {} ms  {:.2} Mray/s  {:.2} Msmp/s (build {:.2} ms){}",
                 bench.manifest.id,
                 timing.wall_ms,
+                timing.rays_per_sec() / 1e6,
+                timing.samples_per_sec() / 1e6,
                 timing.build_ms,
                 mhz.map(|m| format!("  {m:.0} MHz")).unwrap_or_default(),
             );
@@ -133,6 +157,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 benchmark: bench.manifest.id.clone(),
                 config: opts.kind.as_str().to_string(),
                 width: workload.width,
+                height: bench.height(workload.width),
                 spp: workload.spp,
                 commit: commit.sha[..12].to_string(),
                 commit_label: label.clone(),
@@ -141,8 +166,10 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 profile: "optimized",
                 rep,
                 wall_ms: timing.wall_ms,
-                rays: None,
-                rays_per_sec: None,
+                rays: Some(timing.rays),
+                rays_per_sec: Some(timing.rays_per_sec()),
+                samples: Some(timing.samples),
+                samples_per_sec: Some(timing.samples_per_sec()),
                 node_visits: None,
                 prim_tests: None,
                 image_hash: None,
@@ -150,6 +177,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 cpu_mhz: mhz,
                 timestamp: timestamp.clone(),
                 build_ms: Some(timing.build_ms),
+                tiles: TileSummary::new(&timing.tile_ms),
                 env: environment.clone(),
             });
         }
@@ -172,10 +200,11 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
 fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
     println!("\n== summary ==");
     println!(
-        "  {:<5} {:<16} {:>13} {:>6} {:>11} {:>11} {:>7} {:>4}",
-        "ID", "name", "resolution", "spp", "build", "render", "rsd", "n"
+        "  {:<5} {:<15} {:>11} {:>5} {:>10} {:>6} {:>3} {:>8} {:>8} {:>7} {:>6}",
+        "ID", "name", "resolution", "spp", "render", "rsd", "n", "Mray/s", "Msmp/s", "ray/smp",
+        "imbal"
     );
-    println!("  {}", "-".repeat(80));
+    println!("  {}", "-".repeat(100));
 
     for bench in benches {
         let id = &bench.manifest.id;
@@ -186,29 +215,41 @@ fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
             .filter(|r| &r.benchmark == id)
             .map(|r| r.wall_ms as f64)
             .collect();
-        let build: Vec<f64> = records
-            .iter()
-            .filter(|r| &r.benchmark == id)
-            .filter_map(|r| r.build_ms)
-            .collect();
-
         if wall.is_empty() {
             continue;
         }
 
         let Stats { median, rsd_pct, n } = stats(&wall);
-        let build_median = stats(&build).median;
+
+        let of = |f: fn(&Record) -> Option<f64>| -> Vec<f64> {
+            records
+                .iter()
+                .filter(|r| &r.benchmark == id)
+                .filter_map(f)
+                .collect()
+        };
+
+        let mray = of(|r| r.rays_per_sec.map(|v| v / 1e6));
+        let msmp = of(|r| r.samples_per_sec.map(|v| v / 1e6));
+        let per_sample = of(|r| match (r.rays, r.samples) {
+            (Some(rays), Some(samples)) if samples > 0 => Some(rays as f64 / samples as f64),
+            _ => None,
+        });
+        let imbalance = of(|r| r.tiles.as_ref().map(|t| t.imbalance));
 
         println!(
-            "  {:<5} {:<16} {:>13} {:>6} {:>8.2} ms {:>8.0} ms {:>6.1}% {:>4}",
+            "  {:<5} {:<15} {:>11} {:>5} {:>7.0} ms {:>5.1}% {:>3} {:>8.2} {:>8.2} {:>7.2} {:>6.2}",
             id,
             bench.manifest.name,
             format!("{}x{}", workload.width, bench.height(workload.width)),
             workload.spp,
-            build_median,
             median,
             rsd_pct,
             n,
+            stats(&mray).median,
+            stats(&msmp).median,
+            stats(&per_sample).median,
+            stats(&imbalance).median,
         );
     }
 }

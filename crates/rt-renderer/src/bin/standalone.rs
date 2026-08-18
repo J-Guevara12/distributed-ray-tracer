@@ -28,7 +28,7 @@ pub fn main() {
 
     let on_tile = |_t: &TileResult| { };
 
-    render_scene(
+    let _ = render_scene(
         Arc::new(camera),
         Arc::new(ray_tracer),
         Arc::clone(&framebuffer),

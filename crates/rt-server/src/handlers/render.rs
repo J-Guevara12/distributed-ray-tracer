@@ -103,7 +103,7 @@ pub async fn post_render(
         let _guard = JobGuard(is_finished_worker);
 
         println!("¡Motor de renderizado incializado!");
-        render_scene(
+        let _ = render_scene(
             camera,
             tracer,
             fb_worker,

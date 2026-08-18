@@ -69,6 +69,13 @@ COMMITS = [
     ("d50313d", "framebuffer-f32"),
     ("e80a41c", "pre-benchmark"),
     ("25618ca", "end-benchmark"),
+    ("a386316", "f0.7-longest-axis"),
+    ("d77f995", "f0.7-dedup-leaves"),
+    ("59cc3df", "f0.7-front-to-back"),
+    ("89e51db", "f0.7-sort-bbox-min"),
+    ("99b68a4", "f0.4-determinism"),
+    ("8f00613", "f0.5-parking-lot"),
+    ("4948a99", "f0.6-material-enum"),
 ]
 
 # El perfil hay que inyectarlo siempre: los commits viejos no traen

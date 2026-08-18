@@ -8,10 +8,7 @@ use crate::{handlers::ErrorResponse, state::AppState};
 pub async fn get_camera_handler(
     State(state): State<AppState>,
 ) -> Result<Json<CameraConfig>, StatusCode> {
-    let camera_lock = state
-        .camera
-        .read()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let camera_lock = state.camera.read();
 
     let config = camera_lock.config;
 
@@ -22,15 +19,7 @@ pub async fn update_camera_handler(
     State(state): State<AppState>,
     Json(payload): Json<CameraUpdatePayload>,
 ) -> Result<(StatusCode, Json<CameraConfig>), (StatusCode, Json<ErrorResponse>)> {
-    let mut config = match state.camera.read() {
-        Ok(camera_lock) => camera_lock.config,
-        Err(_) => {
-            let error_body = Json(ErrorResponse {
-                error: "The global camera lock hs suffered a poisoning".to_string(),
-            });
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, error_body));
-        }
-    };
+    let mut config = state.camera.read().config; 
 
     let original_width = config.image_width;
     let original_aspect_ratio = config.aspect_ratio;
@@ -46,18 +35,8 @@ pub async fn update_camera_handler(
 
     let new_camera = Camera::new(config);
 
-    match state.camera.write() {
-        Ok(mut camera_lock) => {
-            *camera_lock = Arc::new(new_camera);
+    let mut camera_lock = state.camera.write();
+    *camera_lock = Arc::new(new_camera);
 
-            Ok((StatusCode::OK, Json(config)))
-        }
-        Err(_) => {
-            let error_body = Json(ErrorResponse {
-                error: "Fallo crítico al intentar escribir la nueva cámara en memoria.".to_string(),
-            });
-
-            Err((StatusCode::INTERNAL_SERVER_ERROR, error_body))
-        }
-    }
+    Ok((StatusCode::OK, Json(config)))
 }

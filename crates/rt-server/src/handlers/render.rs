@@ -31,41 +31,16 @@ pub async fn post_render(
     State(state): State<AppState>,
     Json(payload): Json<CreateJobPayload>,
 ) -> Result<(StatusCode, Json<SuccessMesage>), (StatusCode, Json<ErrorResponse>)> {
-    let camera = match state.camera.read() {
-        Ok(camera_lock) => Arc::clone(&*camera_lock),
-        Err(_) => {
-            let error_body = Json(ErrorResponse {
-                error: "The global camera lock has suffered a poisoning".to_string(),
-            });
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, error_body));
-        }
-    };
+    let camera = Arc::clone(&state.camera.read());
+    let world = Arc::clone(&state.world.read());
 
-    let world = match state.world.read() {
-        Ok(world_lock) => Arc::clone(&*world_lock),
-        Err(_) => {
+    let background = match state.scene_data.read().as_ref() {
+        Some(payload) => payload.background.clone(),
+        None => {
             let error_body = Json(ErrorResponse {
-                error: "The global world lock has suffered a poisoning".to_string(),
+                error: "No scene has been loaded yet.".to_string(),
             });
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, error_body));
-        }
-    };
-
-    let background = match state.scene_data.read() {
-        Ok(scene) => match scene.as_ref() {
-            Some(payload) => payload.background.clone(),
-            None => {
-                let error_body = Json(ErrorResponse {
-                    error: "No scene has been loaded yet.".to_string(),
-                });
-                return Err((StatusCode::CONFLICT, error_body));
-            }
-        },
-        Err(_) => {
-            let error_body = Json(ErrorResponse {
-                error: "The global scene lock has suffered a poisoning".to_string(),
-            });
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, error_body));
+            return Err((StatusCode::CONFLICT, error_body));
         }
     };
 
@@ -94,7 +69,7 @@ pub async fn post_render(
         if tx_worker.receiver_count() == 0 {
             return;
         }
-        let params = *display_params.read().unwrap();
+        let params = *display_params.read();
         let patch = TilePatch::from_tile_result(t, &params);
         let _ = tx_worker.send(patch);
     };

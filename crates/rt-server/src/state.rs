@@ -1,10 +1,8 @@
 use rt_core::{Job, display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{camera::Camera, framebuffer::FrameBuffer};
 use rt_scene::{Hittable, bvh::BvhNode, hittable_list::HittableList};
-use std::sync::{
-    Arc, RwLock,
-    atomic::{AtomicBool, AtomicUsize},
-};
+use std::sync::{ Arc, atomic::{AtomicBool, AtomicUsize}};
+use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
 
 #[derive(Clone)]

@@ -9,7 +9,7 @@ use crate::state::AppState;
 
 pub async fn render_stream_handler(State(state): State<AppState>) -> Sse<impl Stream<Item = Result<Event, Infallible>>>{
     let rx = state.tx_stream.subscribe();
-    let params = *state.display_params.read().unwrap();
+    let params = *state.display_params.read();
 
     let current_snapshot = state.framebuffer.get_snapshot();
     let current_image = tokio::task::spawn_blocking(move || {

@@ -1,10 +1,6 @@
 use image::ImageError;
-use std::{
-    fs::File,
-    io::BufWriter,
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::{ fs::File, io::BufWriter, path::Path, sync::{ Arc } };
+use parking_lot::RwLock;
 
 use crate::tiles::TileResult;
 use rt_core::{Vec4, display::{DisplayParams, resolve, to_srgb8}};
@@ -30,7 +26,7 @@ impl FrameBuffer {
 
     /// Escribe los píxeles de un TileResult en la posición matemática correcta del buffer.
     pub fn write_tile(&self, result: &TileResult) {
-        let mut data = self.data.write().unwrap();
+        let mut data = self.data.write();
 
         for local_y in 0..result.original_tile.height {
             let y = result.original_tile.y + local_y;
@@ -45,13 +41,13 @@ impl FrameBuffer {
 
     /// Devuelve una copia snapshot actual de los bytes (útil para guardar imágenes parciales).
     pub fn get_snapshot(&self) -> Vec<Vec4> {
-        let data = self.data.read().unwrap();
+        let data = self.data.read();
 
         data.to_vec()
     }
 
     pub fn save_png<P: AsRef<Path>>(&self, path: P, params: &DisplayParams) -> Result<(), ImageError> {
-        let data = self.data.read().unwrap();
+        let data = self.data.read();
         let expected_size = (self.width * self.height * 3) as usize;
 
         let file = File::create(path)?;

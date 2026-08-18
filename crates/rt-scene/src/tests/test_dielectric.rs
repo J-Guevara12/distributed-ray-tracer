@@ -1,25 +1,21 @@
-use crate::{HitRecord, Material, materials::Dielectric};
+use crate::{HitRecord, Material};
 use glam::Vec3A;
 use rt_core::{Point3, Ray};
 
-#[derive(Debug)]
-struct MockMaterial;
 
-impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3A, Ray)> { None } }
 
 #[test]
 fn test_dielectric_perpendicular_incidence_does_not_bend() {
-    let vidrio = Dielectric::new(1.5); // Índice de refracción típico del vidrio
+    let vidrio = Material::Dielectric { refraction_index: 1.5 }; // Índice de refracción típico del vidrio
     
     // Rayo que entra perfectamente vertical de arriba a abajo
     let ray_in = Ray::new(Point3::new(0.0, 2.0, 0.0), Vec3A::new(0.0, -1.0, 0.0));
-    let mock_mat = MockMaterial;
     let rec = HitRecord {
         p: Point3::ZERO,
         normal: Vec3A::Y, // Normal hacia arriba
         t: 2.0,
         front_face: true, // Viene desde afuera
-        material: &mock_mat,
+        material: 0,
     };
 
     let (attenuation, ray_scattered) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
@@ -35,19 +31,18 @@ fn test_dielectric_perpendicular_incidence_does_not_bend() {
 
 #[test]
 fn test_dielectric_total_internal_reflection_edge_case() {
-    let vidrio = Dielectric::new(1.5);
+    let vidrio = Material::Dielectric { refraction_index: 1.5 };
     
     // Simulamos un rayo que YA ESTÁ DENTRO del vidrio (incidencia desde adentro)
     // Viaja hacia arriba a la derecha con un ángulo muy agudo/rasante
     let ray_in = Ray::new(Point3::new(-1.0, -0.1, 0.0), Vec3A::new(1.0, 0.1, 0.0).normalize());
-    let mock_mat = MockMaterial;
     
     let rec = HitRecord {
         p: Point3::ZERO,
         normal: Vec3A::Y, // La superficie está arriba de él
         t: 1.0,
         front_face: false, // 🔴 CLAVE: El rayo está adentro e intenta salir al aire
-        material: &mock_mat,
+        material: 0,
     };
 
     let (_, ray_scattered) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
@@ -66,16 +61,15 @@ fn test_schlick_approximation_reflectance_limits() {
     // Test directo de la función interna de Schlick (si la expusiste o puedes evaluarla mediante scatter)
     // Si golpeas un vidrio en un ángulo ultra rasante (casi 90 grados respecto a la normal),
     // la probabilidad de reflejar debe acercarse a 1.0 de forma asintótica.
-    let vidrio = Dielectric::new(1.5);
+    let vidrio = Material::Dielectric { refraction_index: 1.5 };
     
     let ray_in = Ray::new(Point3::new(-50.0, 0.001, 0.0), Vec3A::new(1.0, -0.00001, 0.0).normalize());
-    let mock_mat = MockMaterial;
     let rec = HitRecord {
         p: Point3::ZERO,
         normal: Vec3A::Y,
         t: 50.0,
         front_face: true,
-        material: &mock_mat,
+        material: 0,
     };
 
     // Corremos un muestreo estadístico. A este ángulo, casi el 100% de los rayos deben ser REFLEJADOS (Y > 0)

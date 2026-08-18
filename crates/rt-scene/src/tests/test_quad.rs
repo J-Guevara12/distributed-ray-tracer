@@ -7,19 +7,10 @@ use crate::{
     geometry::{PlanarShape, PlanarType},
 };
 
-// 1. Creamos un Material Dummy para las pruebas que no requiera lógica compleja
-#[derive(Debug)]
-struct MockMaterial;
-impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Color, Ray)> {
-        None
-    }
-}
-
 // Función auxiliar para construir un cuadrilátero de prueba frente a la cámara.
 // Es un cuadrado perfecto de 2x2 en el plano XY, empujado a Z = -2.0.
 fn setup_test_quad() -> PlanarShape {
-    let material = Arc::new(MockMaterial);
+    let material = 0;
     PlanarShape::new(
         Point3::new(-1.0, -1.0, -2.0), // q: Esquina inferior izquierda
         Vec3::new(2.0, 0.0, 0.0),      // u: Se extiende 2 unidades a la derecha (Eje X)

@@ -7,8 +7,7 @@ use crate::tiles::TileResult;
 use crate::tracers::RayTracer;
 use rt_core::background::Background;
 use rt_core::{Color, Point3, Ray, Vec3, Vec4};
-use rt_scene::Hittable;
-use rt_scene::hittable_list::HittableList;
+use rt_scene::{Scene, hittable_list::HittableList};
 use std::sync::{Arc, Mutex};
 
 struct MockRayTracer {
@@ -19,8 +18,7 @@ impl RayTracer for MockRayTracer {
     fn trace_ray(
         &self,
         _ray: Ray,
-        _world: &dyn Hittable,
-        _background: &Background,
+        _scene: &Scene,
         ctx: &mut RayContext,
     ) -> Color {
         ctx.stats.rays += 1;
@@ -53,8 +51,11 @@ fn test_render_scene_integration() {
     });
 
     let framebuffer = Arc::new(FrameBuffer::new(width, height));
-    let world = Arc::new(HittableList::new());
-    let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
+    let scene = Scene {
+        world: Arc::new(HittableList::new()),
+        materials: vec![],
+        background: Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0)),
+    };
 
     let collected: Mutex<Vec<TileResult>> = Mutex::new(Vec::new());
     let on_tile = |tile: &TileResult| collected.lock().unwrap().push(tile.clone());
@@ -65,8 +66,7 @@ fn test_render_scene_integration() {
         Arc::clone(&framebuffer),
         &on_tile,
         tile_size,
-        world.as_ref(),
-        &background,
+        &scene,
     );
 
     // Un rayo por muestra por píxel, y un tiempo medido por tile.

@@ -2,7 +2,6 @@ use rt_core::dto::{MaterialDTO, ObjectDTO, ScenePayload};
 
 use crate::{
     geometry::{PlanarShape, Sphere},
-    materials::{Dielectric, DiffuseLight, Lambertian, Metal},
     *,
 };
 
@@ -34,7 +33,7 @@ impl HittableList {
 }
 
 impl Hittable for HittableList {
-    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         let mut hit_anything: Option<HitRecord> = None;
         let mut closest_so_far = ray_t.max;
 
@@ -54,21 +53,32 @@ impl Hittable for HittableList {
     }
 }
 
-impl From<&ScenePayload> for HittableList {
+/// Geometría más el array de materiales que sus primitivas indexan.
+pub struct SceneData {
+    pub objects: Vec<Arc<dyn Hittable>>,
+    pub materials: Vec<Material>,
+}
+
+impl From<&ScenePayload> for SceneData {
     fn from(value: &ScenePayload) -> Self {
         let mut mundo = HittableList::new();
+        let mut palette = Vec::with_capacity(value.materials.len());
         let mut materials = HashMap::new();
 
         for (id, mat_dto) in &value.materials {
-            let material: Arc<dyn Material> = match mat_dto {
-                MaterialDTO::Lambertian { albedo } => Arc::new(Lambertian::new(*albedo)),
-                MaterialDTO::Metal { albedo, fuzz } => Arc::new(Metal::new(*albedo, *fuzz)),
-                MaterialDTO::Direlectric { refraction_index } => {
-                    Arc::new(Dielectric::new(*refraction_index))
-                }
-                MaterialDTO::DiffuseLight { emit } => Arc::new(DiffuseLight::new(*emit)),
+            let material = match mat_dto {
+                MaterialDTO::Lambertian { albedo } => Material::Lambertian { albedo: *albedo },
+                MaterialDTO::Metal { albedo, fuzz } => Material::Metal {
+                    albedo: *albedo,
+                    fuzz: *fuzz,
+                },
+                MaterialDTO::Direlectric { refraction_index } => Material::Dielectric {
+                    refraction_index: *refraction_index,
+                },
+                MaterialDTO::DiffuseLight { emit } => Material::DiffuseLight { emit: *emit },
             };
-            materials.insert(id.clone(), material);
+            palette.push(material);
+            materials.insert(id.clone(), (palette.len() - 1) as u32);
         }
         for obj in &value.objects {
             match obj {
@@ -78,7 +88,7 @@ impl From<&ScenePayload> for HittableList {
                     material,
                 } => {
                     if let Some(mat) = materials.get(material) {
-                        let sphere = Sphere::new(*center, *radius, Arc::clone(mat));
+                        let sphere = Sphere::new(*center, *radius, *mat);
 
                         mundo.add(Arc::new(sphere));
                     } else {
@@ -95,7 +105,7 @@ impl From<&ScenePayload> for HittableList {
                             *u,
                             *v,
                             geometry::PlanarType::Quad,
-                            Arc::clone(mat),
+                            *mat,
                         );
 
                         mundo.add(Arc::new(quad));
@@ -108,7 +118,7 @@ impl From<&ScenePayload> for HittableList {
                             *u,
                             *v,
                             geometry::PlanarType::Triangle,
-                            Arc::clone(mat),
+                            *mat,
                         );
 
                         mundo.add(Arc::new(triangle));
@@ -121,7 +131,7 @@ impl From<&ScenePayload> for HittableList {
                             *u,
                             *v,
                             geometry::PlanarType::Elipse,
-                            Arc::clone(mat),
+                            *mat,
                         );
 
                         mundo.add(Arc::new(elipse));
@@ -130,6 +140,6 @@ impl From<&ScenePayload> for HittableList {
             }
         }
 
-        mundo
+        Self { objects: mundo.objects, materials: palette }
     }
 }

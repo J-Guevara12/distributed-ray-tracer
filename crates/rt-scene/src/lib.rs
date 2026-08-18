@@ -1,8 +1,8 @@
-use fastrand::Rng;
-use rt_core::{Color, Interval, Point3, Ray, Vec3};
-use std::fmt::Debug;
+use rt_core::{Interval, Point3, Ray, Vec3, background::Background};
+use std::sync::Arc;
 
 pub use crate::aabb::Aabb;
+pub use crate::materials::Material;
 
 pub mod geometry;
 pub mod hittable_list;
@@ -12,21 +12,24 @@ pub mod bvh;
 mod utils;
 
 #[derive(Debug, Clone, Copy)]
-pub struct HitRecord<'a> {
+pub struct HitRecord {
     pub p: Point3,
     pub normal: Vec3,
     pub t: f32,
     pub front_face: bool,
-    pub material: &'a dyn Material,
+    /// Índice en el array de materiales de la escena. Un índice y no una
+    /// referencia: elimina el lifetime del record y baja la primitiva de 48 a
+    /// 32 bytes.
+    pub material: u32,
 }
 
-impl<'a> HitRecord<'a> {
+impl HitRecord {
     pub fn new(
         ray: &Ray,
         t: f32,
         outward_normal: Vec3,
         p: Point3,
-        material: &'a dyn Material,
+        material: u32,
     ) -> Self {
         // Determinar si el rayo viene de afuera o de adentro del objeto
         let front_face = ray.direction.dot(outward_normal) < 0.0;
@@ -47,16 +50,16 @@ impl<'a> HitRecord<'a> {
 }
 
 pub trait Hittable: Send + Sync {
-    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>>;
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>;
     fn bounding_box(&self) -> Aabb;
 }
 
-pub trait Material: Send + Sync + Debug {
-    fn scatter(&self, ray_in: &Ray, rec: &HitRecord, rng: &mut Rng) -> Option<(Vec3, Ray)>;
-
-    fn emitted(&self, _u: f32, _v: f32, _p: Point3) -> Color {
-        Color::new(0.0, 0.0, 0.0)
-    }
+/// Geometría más los materiales que sus primitivas indexan. El array vive
+/// junto al mundo porque `HitRecord` solo guarda el índice.
+pub struct Scene {
+    pub world: Arc<dyn Hittable>,
+    pub materials: Vec<Material>,
+    pub background: Background,
 }
 
 #[cfg(test)]

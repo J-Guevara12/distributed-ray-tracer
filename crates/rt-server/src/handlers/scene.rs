@@ -1,7 +1,8 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use rt_core::dto::ScenePayload;
-use rt_scene::{bvh::BvhNode, hittable_list::HittableList};
+use rt_scene::{Scene, bvh::BvhNode, hittable_list::SceneData};
+use std::sync::Arc;
 
 use crate::state::AppState;
 
@@ -22,8 +23,12 @@ pub async fn post_scene_handler(
     Json(payload): Json<ScenePayload>,
 ) -> Result<StatusCode, StatusCode> {
 
-    let hittable_list = HittableList::from(&payload);
-    let world = BvhNode::build(hittable_list.objects);
+    let data = SceneData::from(&payload);
+    let world = Arc::new(Scene {
+        world: BvhNode::build(data.objects),
+        materials: data.materials,
+        background: payload.background.clone(),
+    });
 
     let mut world_lock = state.world.write();
     let mut data_lock = state.scene_data.write();

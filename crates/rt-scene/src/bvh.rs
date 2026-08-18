@@ -77,7 +77,7 @@ impl BvhNode {
 }
 
 impl Hittable for BvhNode {
-    fn hit(&self, ray: &rt_core::Ray, ray_t: rt_core::Interval) -> Option<crate::HitRecord<'_>> {
+    fn hit(&self, ray: &rt_core::Ray, ray_t: rt_core::Interval) -> Option<crate::HitRecord> {
         if !(self.bbox.hit(*ray, ray_t)){
             return None
         }

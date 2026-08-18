@@ -4,7 +4,7 @@ use rt_core::{display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{
     camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tiles::TileResult, tracers::PathTracer,
 };
-use rt_scene::{bvh::BvhNode, hittable_list::HittableList};
+use rt_scene::{Scene, bvh::BvhNode, hittable_list::SceneData};
 
 pub fn main() {
     println!("Inicializando render local");
@@ -17,8 +17,12 @@ pub fn main() {
     let file_camera = File::open(path_camera).expect("Error when opening spheres_scene.json file");
     let camera_config: CameraConfig = serde_json::from_reader(file_camera).expect("Error when parsing spheres_scene.json file");
 
-    let hittable_list = HittableList::from(&scene_payload);
-    let world = BvhNode::build(hittable_list.objects);
+    let data = SceneData::from(&scene_payload);
+    let scene = Scene {
+        world: BvhNode::build(data.objects),
+        materials: data.materials,
+        background: scene_payload.background.clone(),
+    };
     let camera = Camera::new(camera_config);
 
     let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height));
@@ -34,8 +38,7 @@ pub fn main() {
         Arc::clone(&framebuffer),
         &on_tile,
         128,
-        &*world,
-        &scene_payload.background,
+        &scene,
     );
     println!("Procesado en {} ms", instant.elapsed().as_millis());
     let display_params = DisplayParams::default();

@@ -1,6 +1,6 @@
 use rt_core::{Job, display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{camera::Camera, framebuffer::FrameBuffer};
-use rt_scene::{Hittable, bvh::BvhNode, hittable_list::HittableList};
+use rt_scene::{Scene, bvh::BvhNode, hittable_list::SceneData};
 use std::sync::{ Arc, atomic::{AtomicBool, AtomicUsize}};
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
@@ -11,7 +11,7 @@ pub struct AppState {
     pub tx_stream: broadcast::Sender<rt_renderer::tiles::TilePatch>,
     pub is_finished: Arc<std::sync::atomic::AtomicBool>,
     pub camera: Arc<RwLock<Arc<Camera>>>,
-    pub world: Arc<RwLock<Arc<dyn Hittable>>>,
+    pub world: Arc<RwLock<Arc<Scene>>>,
     pub display_params: Arc<RwLock<DisplayParams>>,
     pub scene_data: Arc<RwLock<Option<ScenePayload>>>,
     pub _job_sender: mpsc::Sender<Job>,
@@ -29,10 +29,14 @@ impl AppState {
         let camera = Arc::new(RwLock::new(camera));
         let scene_data = ScenePayload::default();
 
-        let hittable_list = HittableList::from(&scene_data);
-        let bvh = BvhNode::build(hittable_list.objects);
+        let data = SceneData::from(&scene_data);
+        let scene = Scene {
+            world: BvhNode::build(data.objects),
+            materials: data.materials,
+            background: scene_data.background.clone(),
+        };
 
-        let world = Arc::new(RwLock::new(bvh));
+        let world = Arc::new(RwLock::new(Arc::new(scene)));
         let scene_data = Arc::new(RwLock::new(Some(scene_data)));
         let display_params = Arc::new(RwLock::new(DisplayParams::default()));
 

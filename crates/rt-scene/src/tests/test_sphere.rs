@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use rt_core::{Point3, Vec3};
-use crate::{geometry::Sphere, materials::Lambertian, *};
+use crate::{geometry::Sphere, *};
 
 #[test]
 fn test_sphere_hit_direct() {
-    let material = Arc::new(Lambertian::new(Vec3::new(1.00, 1.00, 1.00)));
-    let sphere = Sphere::new(Point3::new(0.0, 0.0, -5.0), 1.0, material);
+    let sphere = Sphere::new(Point3::new(0.0, 0.0, -5.0), 1.0, 0);
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
     let interval = Interval::new(0.0, 100.0);
 
@@ -22,8 +21,7 @@ fn test_sphere_hit_direct() {
 
 #[test]
 fn test_sphere_miss() {
-    let material = Arc::new(Lambertian::new(Vec3::new(1.00, 1.00, 1.00)));
-    let sphere = Sphere::new(Point3::new(0.0, 5.0, -5.0), 1.0, material); // Esfera movida hacia arriba
+    let sphere = Sphere::new(Point3::new(0.0, 5.0, -5.0), 1.0, 0); // Esfera movida hacia arriba
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
     let interval = Interval::new(0.0, 100.0);
 

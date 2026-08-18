@@ -34,15 +34,12 @@ pub async fn post_render(
     let camera = Arc::clone(&state.camera.read());
     let world = Arc::clone(&state.world.read());
 
-    let background = match state.scene_data.read().as_ref() {
-        Some(payload) => payload.background.clone(),
-        None => {
-            let error_body = Json(ErrorResponse {
-                error: "No scene has been loaded yet.".to_string(),
-            });
-            return Err((StatusCode::CONFLICT, error_body));
-        }
-    };
+    if state.scene_data.read().is_none() {
+        let error_body = Json(ErrorResponse {
+            error: "No scene has been loaded yet.".to_string(),
+        });
+        return Err((StatusCode::CONFLICT, error_body));
+    }
 
     if state
         .is_finished
@@ -84,8 +81,7 @@ pub async fn post_render(
             fb_worker,
             &on_tile,
             payload.tile_size.unwrap_or(128),
-            &*world,
-            &background,
+            &world,
         );
     });
 

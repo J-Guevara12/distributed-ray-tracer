@@ -1,21 +1,15 @@
-use crate::{materials::Lambertian, *};
+use crate::*;
 use rt_core::{Point3, Ray, Vec3};
 
 // Un material mock que implementa la interfaz para pruebas puntuales
-#[derive(Debug)]
-struct MockMaterial;
 
-impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3, Ray)> { None }
-}
 
 #[test]
 fn test_lambertian_attenuation_and_direction() {
     let albedo = Vec3::new(0.8, 0.3, 0.2);
-    let mat = Lambertian::new(albedo);
+    let mat = Material::Lambertian { albedo: albedo };
     
     let ray_in = Ray::new(Point3::ZERO, Vec3::new(0.0, 0.0, -1.0));
-    let mock_mat = MockMaterial;
     
     // Simulamos un impacto en el origen con una normal apuntando hacia +Y
     let rec = HitRecord {
@@ -23,7 +17,7 @@ fn test_lambertian_attenuation_and_direction() {
         normal: Vec3::Y,
         t: 1.0,
         front_face: true,
-        material: &mock_mat,
+        material: 0,
     };
 
     let result = mat.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0));

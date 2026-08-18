@@ -1,11 +1,11 @@
 use fastrand::Rng;
 use rayon::prelude::*;
-use rt_scene::Hittable;
+use rt_scene::Scene;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{Level, span};
 
-use rt_core::{Color, Vec4, background::Background};
+use rt_core::{Color, Vec4};
 
 use crate::{
     camera::Camera, framebuffer::FrameBuffer, stats::{RayStats, RenderStats}, tiles::{TileGenerator, TileResult}, tracers::{RayContext, RayTracer},
@@ -24,8 +24,7 @@ pub fn render_scene<T: RayTracer>(
     framebuffer: Arc<FrameBuffer>,
     on_tile: &(impl Fn(&TileResult) + Send + Sync),
     tile_size: u32,
-    world: &dyn Hittable,
-    background: &Background,
+    scene: &Scene,
 ) -> RenderStats {
     let generator = TileGenerator::new(camera.width, camera.height, tile_size);
     let samples_float = camera.samples_per_pixel as f32;
@@ -64,7 +63,7 @@ pub fn render_scene<T: RayTracer>(
                         ctx.rng = Rng::with_seed(splitmix64(index));
 
                         let ray = camera.get_ray(x, y, sample, &mut ctx.rng);
-                        let color = tracer.trace_ray(ray, world, background, &mut ctx);
+                        let color = tracer.trace_ray(ray, scene, &mut ctx);
 
                         color_accumulator += color;
                     }

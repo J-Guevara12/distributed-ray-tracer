@@ -9,7 +9,8 @@ use rt_renderer::render::render_scene;
 use rt_renderer::tiles::TileResult;
 use rt_renderer::tracers::PathTracer;
 use rt_scene::bvh::BvhNode;
-use rt_scene::hittable_list::HittableList;
+use rt_scene::hittable_list::SceneData;
+use rt_scene::Scene;
 
 use crate::env;
 use crate::manifest::{Benchmark, WorkloadKind};
@@ -58,8 +59,12 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
     let camera = Camera::new(config);
 
     let build_start = Instant::now();
-    let list = HittableList::from(&bench.scene);
-    let world = BvhNode::build(list.objects);
+    let data = SceneData::from(&bench.scene);
+    let scene = Scene {
+        world: BvhNode::build(data.objects),
+        materials: data.materials,
+        background: bench.scene.background.clone(),
+    };
     let build_ms = build_start.elapsed().as_secs_f64() * 1000.0;
 
     let (width, height) = (camera.width, camera.height);
@@ -76,8 +81,7 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
         framebuffer,
         &on_tile,
         opts.tile_size,
-        &*world,
-        &bench.scene.background,
+        &scene,
     );
 
     Timing {

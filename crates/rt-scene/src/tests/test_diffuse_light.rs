@@ -1,32 +1,20 @@
 use rt_core::{Color, Point3, Ray, Vec3};
 
-use crate::{HitRecord, Material, materials::DiffuseLight};
+use crate::{HitRecord, Material};
 
 // Función auxiliar para generar un HitRecord dummy necesario para la firma de scatter
-fn setup_dummy_hit_record() -> HitRecord<'static> {
-    // Creamos un rayo dummy
+fn setup_dummy_hit_record() -> HitRecord {
     let ray = Ray {
         origin: Point3::new(0.0, 0.0, 0.0),
         direction: Vec3::new(0.0, 0.0, -1.0),
     };
-
-    // Asumimos un material dummy para el hit record de control
-    #[derive(Debug)]
-    struct DummyMaterial;
-    impl crate::Material for DummyMaterial {
-        fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3, Ray)> {
-            None
-        }
-    }
-
-    static DUMMY_MAT: DummyMaterial = DummyMaterial;
 
     HitRecord::new(
         &ray,
         1.0,
         Vec3::new(0.0, 0.0, 1.0),    // Normal
         Point3::new(0.0, 0.0, -1.0), // Punto de intersección
-        &DUMMY_MAT,
+        0,
     )
 }
 
@@ -34,7 +22,7 @@ fn setup_dummy_hit_record() -> HitRecord<'static> {
 fn test_scatter_returns_none() {
     // Un material emisivo puro no debe dispersar la luz, debe absorber el rayo
     let light_color = Color::new(5.0, 5.0, 5.0);
-    let light_material = DiffuseLight::new(light_color);
+    let light_material = Material::DiffuseLight { emit: light_color };
 
     let ray_in = Ray {
         origin: Point3::new(0.0, 0.0, 0.0),
@@ -54,7 +42,7 @@ fn test_scatter_returns_none() {
 fn test_emitted_returns_correct_color() {
     // Validar que devuelva la radiancia constante sin importar los parámetros de entrada
     let expected_color = Color::new(12.5, 7.2, 3.0);
-    let light_material = DiffuseLight::new(expected_color);
+    let light_material = Material::DiffuseLight { emit: expected_color };
 
     // Probamos en el origen con coordenadas UV (0,0)
     let color_at_origin = light_material.emitted(0.0, 0.0, Point3::new(0.0, 0.0, 0.0));
@@ -70,7 +58,7 @@ fn test_emitted_with_hdr_values() {
     // Las luces avanzadas usan valores de albedo mayores a 1.0 (HDR)
     // Este test asegura que el constructor no esté recortando (clamping) los valores a 1.0
     let hdr_color = Color::new(50.0, 50.0, 50.0);
-    let light_material = DiffuseLight::new(hdr_color);
+    let light_material = Material::DiffuseLight { emit: hdr_color };
 
     let emitted_color = light_material.emitted(0.5, 0.5, Point3::new(1.0, 2.0, 3.0));
 

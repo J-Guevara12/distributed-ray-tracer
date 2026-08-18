@@ -1,25 +1,21 @@
-use crate::{HitRecord, Material, materials::Metal};
+use crate::{HitRecord, Material};
 use glam::Vec3A;
 use rt_core::{Point3, Ray};
 
-#[derive(Debug)]
-struct MockMaterial;
-impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3A, Ray)> { None } }
 
 #[test]
 fn test_perfect_metal_reflection_at_45_degrees() {
     let albedo = Vec3A::ONE; // Metal blanco perfecto
-    let espejo_perfecto = Metal::new(albedo, 0.0); // Fuzz = 0.0
+    let espejo_perfecto = Material::Metal { albedo: albedo, fuzz: 0.0 }; // Fuzz = 0.0
     
     // Rayo entrante a 45° cayendo hacia el origen
     let ray_in = Ray::new(Point3::new(-1.0, 1.0, 0.0), Vec3A::new(1.0, -1.0, 0.0));
-    let mock_mat = MockMaterial;
     let rec = HitRecord {
         p: Point3::ZERO,
         normal: Vec3A::Y, // Superficie horizontal mirando hacia arriba
         t: 1.0,
         front_face: true,
-        material: &mock_mat,
+        material: 0,
     };
 
     let (_, ray_scattered) = espejo_perfecto.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
@@ -42,17 +38,16 @@ fn test_perfect_metal_reflection_at_45_degrees() {
 fn test_metal_fuzzy_absorption_edge_case() {
     let albedo = Vec3A::ONE;
     // Un metal extremadamente rugoso (fuzz = 1.0)
-    let metal_rugoso = Metal::new(albedo, 1.0);
+    let metal_rugoso = Material::Metal { albedo: albedo, fuzz: 1.0 };
     
     // Un rayo que golpea de forma muy rasante (casi horizontal)
     let ray_in = Ray::new(Point3::new(-1.0, 0.01, 0.0), Vec3A::new(1.0, -0.01, 0.0));
-    let mock_mat = MockMaterial;
     let rec = HitRecord {
         p: Point3::ZERO,
         normal: Vec3A::Y,
         t: 1.0,
         front_face: true,
-        material: &mock_mat,
+        material: 0,
     };
 
     // Debido a la alta rugosidad, probabilísticamente muchas muestras intentarán rebotar

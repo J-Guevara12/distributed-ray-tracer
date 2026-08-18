@@ -6,12 +6,6 @@ use crate::{HitRecord, Hittable, Interval, Material, aabb::Aabb, bvh::BvhNode};
 // 1. COMPONENTES MOCK PARA AISLAR LAS PRUEBAS
 // =========================================================================
 
-#[derive(Clone, Debug)]
-struct MockMaterial;
-impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3, Ray)> { None }
-    fn emitted(&self, _: f32, _: f32, _: Point3) -> Color { Color::ZERO }
-}
 
 // Un objeto ficticio con una posición y caja conocida para probar el árbol
 struct MockHittable {
@@ -26,10 +20,9 @@ impl MockHittable {
 }
 
 impl Hittable for MockHittable {
-    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         // Si el objeto está configurado para registrar un impacto, evaluamos si el rayo toca su caja
         if let Some(p) = self.hit_point && self.bbox.hit(*ray, ray_t) {
-            static MAT: MockMaterial = MockMaterial;
             // El `t` tiene que corresponder al punto de impacto: el BVH
             // recorta el intervalo del hijo derecho con él, así que un `t`
             // fijo haría que el árbol descartara impactos válidos según
@@ -40,7 +33,7 @@ impl Hittable for MockHittable {
                 t,
                 Vec3::new(0.0, 0.0, 1.0),
                 p,
-                &MAT,
+                0,
             ));
         }
         None

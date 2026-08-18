@@ -1,11 +1,11 @@
-use std::sync::Arc;
+
 
 use crate::*;
 
 pub struct Sphere {
     pub center: Point3,
     pub radius: f32,
-    pub material: Arc<dyn Material>,
+    pub material: u32,
 }
 
 pub enum PlanarType {
@@ -22,12 +22,12 @@ pub struct PlanarShape {
     pub w: Vec3,
     pub d: f32,
     pub primitive_type: PlanarType,
-    pub material: Arc<dyn Material>,
+    pub material: u32,
     pub bbox: Aabb
 }
 
 impl Sphere {
-    pub fn new(center: Point3, radius: f32, material: Arc<dyn Material>) -> Self {
+    pub fn new(center: Point3, radius: f32, material: u32) -> Self {
         Self {
             center,
             radius,
@@ -37,7 +37,7 @@ impl Sphere {
 }
 
 impl Hittable for Sphere {
-    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         let oc = self.center - ray.origin;
         let h = ray.direction.dot(oc);
         let c = oc.length_squared() - self.radius * self.radius;
@@ -68,7 +68,7 @@ impl Hittable for Sphere {
             t,
             outward_normal,
             p,
-            self.material.as_ref(),
+            self.material,
         ))
     }
     fn bounding_box(&self) -> Aabb {
@@ -86,7 +86,7 @@ impl PlanarShape {
         u: Vec3,
         v: Vec3,
         primitive_type: PlanarType,
-        material: Arc<dyn Material>,
+        material: u32,
     ) -> Self {
         let w = u.cross(v);
         let n = w.normalize();
@@ -140,7 +140,7 @@ impl PlanarShape {
 }
 
 impl Hittable for PlanarShape {
-    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord<'_>> {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         let denom = self.n.dot(ray.direction);
 
         if denom.abs() < 1e-8 {
@@ -167,7 +167,7 @@ impl Hittable for PlanarShape {
             t,
             self.n,
             intersection,
-            self.material.as_ref(),
+            self.material,
         ))
     }
 

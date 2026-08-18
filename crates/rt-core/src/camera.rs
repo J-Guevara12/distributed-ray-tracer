@@ -1,4 +1,5 @@
 use crate::{Point3, Ray, Vec3};
+use fastrand::Rng;
 use optional_struct::*;
 use serde::{Deserialize, Serialize};
 
@@ -77,7 +78,7 @@ impl Camera {
 
     /// Genera un rayo dirigido al píxel (x, y).
     /// Si `sample > 0`, aplica un desfase aleatorio sub-píxel (Antialiasing).
-    pub fn get_ray(&self, x: u32, y: u32, sample: u32) -> Ray {
+    pub fn get_ray(&self, x: u32, y: u32, sample: u32, rng: &mut Rng) -> Ray {
         debug_assert!(
             x < self.width,
             "get_ray: x ({}) must be less than the camera width ({})",
@@ -94,7 +95,7 @@ impl Camera {
         let offset = if sample == 0 {
             Vec3::new(0.0, 0.0, 0.0)
         } else {
-            self.sample_square()
+            self.sample_square(rng)
         };
 
         let destination = self.pixel00_loc
@@ -104,7 +105,7 @@ impl Camera {
         let origin = if self.config.defocus_angle <= 0.0 {
             self.origin
         } else {
-            let lens_sample = self.sample_disk_in_unit_circle();
+            let lens_sample = self.sample_disk_in_unit_circle(rng);
             self.origin
                 + (lens_sample.x * self.defocus_disk_u)
                 + (lens_sample.y * self.defocus_disk_v)
@@ -115,19 +116,19 @@ impl Camera {
         Ray { origin, direction }
     }
 
-    fn sample_square(&self) -> Vec3 {
-        let rand_x = fastrand::f32() - 0.5;
-        let rand_y = fastrand::f32() - 0.5;
+    fn sample_square(&self, rng: &mut Rng) -> Vec3 {
+        let rand_x = rng.f32() - 0.5;
+        let rand_y = rng.f32() - 0.5;
 
         Vec3::new(rand_x, rand_y, 0.0)
     }
 
-    fn sample_disk_in_unit_circle(&self) -> Vec3 {
+    fn sample_disk_in_unit_circle(&self, rng: &mut Rng) -> Vec3 {
         loop {
             // Generamos un punto en un cuadrado de [-1, 1] en X y Y
             let p = Vec3::new(
-                fastrand::f32() * 2.0 - 1.0,
-                fastrand::f32() * 2.0 - 1.0,
+                rng.f32() * 2.0 - 1.0,
+                rng.f32() * 2.0 - 1.0,
                 0.0,
             );
             // Si el punto está dentro del círculo unitario (magnitud al cuadrado < 1), lo devolvemos

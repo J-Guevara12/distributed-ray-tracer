@@ -11,7 +11,7 @@ use crate::{
 #[derive(Debug)]
 struct MockMaterial;
 impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Color, Ray)> {
+    fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Color, Ray)> {
         None
     }
 }

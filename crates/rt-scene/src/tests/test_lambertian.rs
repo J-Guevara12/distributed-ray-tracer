@@ -6,7 +6,7 @@ use rt_core::{Point3, Ray, Vec3};
 struct MockMaterial;
 
 impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Vec3, Ray)> { None }
+    fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3, Ray)> { None }
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn test_lambertian_attenuation_and_direction() {
         material: &mock_mat,
     };
 
-    let result = mat.scatter(&ray_in, &rec);
+    let result = mat.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0));
     
     assert!(result.is_some(), "Lambertian siempre debería dispersar el rayo");
     let (attenuation, ray_scattered) = result.unwrap();

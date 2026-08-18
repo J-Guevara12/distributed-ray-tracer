@@ -1,4 +1,4 @@
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone)]
 pub struct RayStats {
     pub rays: u64,
 }

@@ -1,3 +1,4 @@
+use fastrand::Rng;
 use rt_core::{Color, Ray, Vec3};
 
 use crate::Material;
@@ -19,8 +20,9 @@ impl Material for Lambertian {
         &self,
         _ray_in: &rt_core::Ray,
         rec: &crate::HitRecord,
+        rng: &mut Rng
     ) -> Option<(rt_core::Vec3, rt_core::Ray)> {
-        let mut scatter_direction = rec.normal + random_unit_vector();
+        let mut scatter_direction = rec.normal + random_unit_vector(rng);
 
         if is_near_zero(&scatter_direction) {
             scatter_direction = rec.normal
@@ -45,10 +47,10 @@ impl Metal {
 }
 
 impl Material for Metal {
-    fn scatter(&self, ray_in: &Ray, rec: &crate::HitRecord) -> Option<(Vec3, Ray)> {
+    fn scatter(&self, ray_in: &Ray, rec: &crate::HitRecord, rng: &mut Rng) -> Option<(Vec3, Ray)> {
         let reflected = reflect(ray_in.direction, rec.normal);
 
-        let scatter_direction = reflected + self.fuzz * random_unit_vector();
+        let scatter_direction = reflected + self.fuzz * random_unit_vector(rng);
         let scattered_ray = Ray::new(rec.p, scatter_direction);
 
         if scatter_direction.dot(rec.normal) > 0.0 {
@@ -71,7 +73,7 @@ impl Dielectric {
 }
 
 impl Material for Dielectric {
-    fn scatter(&self, ray_in: &Ray, rec: &crate::HitRecord) -> Option<(Vec3, Ray)> {
+    fn scatter(&self, ray_in: &Ray, rec: &crate::HitRecord, rng: &mut Rng) -> Option<(Vec3, Ray)> {
         let attenuation = Color::ONE;
 
         let ri = if rec.front_face {
@@ -85,7 +87,7 @@ impl Material for Dielectric {
 
         let cannot_refract = ri * sin_theta > 1.0;
 
-        let scatter_direction = if cannot_refract || reflectance(cos_theta, ri) > fastrand::f32() {
+        let scatter_direction = if cannot_refract || reflectance(cos_theta, ri) > rng.f32() {
             // Caso A: Reflexión interna total o probabilidad alta según Schlick -> El rayo rebota como espejo
             reflect(ray_in.direction, rec.normal)
         } else {
@@ -109,7 +111,7 @@ impl DiffuseLight {
 }
 
 impl Material for DiffuseLight {
-    fn scatter(&self, _ray_in: &Ray, _rec: &crate::HitRecord) -> Option<(Vec3, Ray)> {
+    fn scatter(&self, _ray_in: &Ray, _rec: &crate::HitRecord, _rng: &mut Rng) -> Option<(Vec3, Ray)> {
         None
     }
 

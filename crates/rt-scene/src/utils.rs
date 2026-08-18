@@ -1,11 +1,12 @@
+use fastrand::Rng;
 use rt_core::{Vec3, Color};
 
-pub fn random_unit_vector() -> Vec3 {
+pub fn random_unit_vector(rng: &mut Rng) -> Vec3 {
     loop {
         let p = Vec3::new(
-            fastrand::f32() * 2.0 - 1.0,
-            fastrand::f32() * 2.0 - 1.0,
-            fastrand::f32() * 2.0 - 1.0,
+            rng.f32() * 2.0 - 1.0,
+            rng.f32() * 2.0 - 1.0,
+            rng.f32() * 2.0 - 1.0,
         );
         
         let len_sq = p.length_squared();

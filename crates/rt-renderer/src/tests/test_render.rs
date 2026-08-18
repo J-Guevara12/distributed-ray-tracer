@@ -2,6 +2,7 @@ use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
 use crate::render::render_scene;
 use crate::stats::RayStats;
+use crate::tracers::RayContext;
 use crate::tiles::TileResult;
 use crate::tracers::RayTracer;
 use rt_core::background::Background;
@@ -20,9 +21,9 @@ impl RayTracer for MockRayTracer {
         _ray: Ray,
         _world: &dyn Hittable,
         _background: &Background,
-        stats: &mut RayStats,
+        ctx: &mut RayContext,
     ) -> Color {
-        stats.rays += 1;
+        ctx.stats.rays += 1;
         self.fixed_color
     }
 }

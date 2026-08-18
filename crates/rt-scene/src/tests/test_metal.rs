@@ -4,7 +4,7 @@ use rt_core::{Point3, Ray};
 
 #[derive(Debug)]
 struct MockMaterial;
-impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Vec3A, Ray)> { None } }
+impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3A, Ray)> { None } }
 
 #[test]
 fn test_perfect_metal_reflection_at_45_degrees() {
@@ -22,7 +22,7 @@ fn test_perfect_metal_reflection_at_45_degrees() {
         material: &mock_mat,
     };
 
-    let (_, ray_scattered) = espejo_perfecto.scatter(&ray_in, &rec).unwrap();
+    let (_, ray_scattered) = espejo_perfecto.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
 
     // Esperado: Debe salir rebotado perfectamente a 45° hacia arriba
     let direccion_esperada = Vec3A::new(1.0, 1.0, 0.0).normalize();
@@ -59,7 +59,7 @@ fn test_metal_fuzzy_absorption_edge_case() {
     // por debajo de la normal (Y < 0). Hacemos un bucle para cazar ese caso.
     let mut absorbido = false;
     for _ in 0..100 {
-        if metal_rugoso.scatter(&ray_in, &rec).is_none() {
+        if metal_rugoso.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).is_none() {
             absorbido = true;
             break;
         }

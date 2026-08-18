@@ -9,7 +9,7 @@ use crate::{HitRecord, Hittable, Interval, Material, aabb::Aabb, bvh::BvhNode};
 #[derive(Clone, Debug)]
 struct MockMaterial;
 impl Material for MockMaterial {
-    fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Vec3, Ray)> { None }
+    fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3, Ray)> { None }
     fn emitted(&self, _: f32, _: f32, _: Point3) -> Color { Color::ZERO }
 }
 

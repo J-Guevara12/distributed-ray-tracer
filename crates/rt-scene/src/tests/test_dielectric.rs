@@ -5,7 +5,7 @@ use rt_core::{Point3, Ray};
 #[derive(Debug)]
 struct MockMaterial;
 
-impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Vec3A, Ray)> { None } }
+impl Material for MockMaterial { fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3A, Ray)> { None } }
 
 #[test]
 fn test_dielectric_perpendicular_incidence_does_not_bend() {
@@ -22,7 +22,7 @@ fn test_dielectric_perpendicular_incidence_does_not_bend() {
         material: &mock_mat,
     };
 
-    let (attenuation, ray_scattered) = vidrio.scatter(&ray_in, &rec).unwrap();
+    let (attenuation, ray_scattered) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
 
     // 1. El vidrio transparente no debe teñir la luz (atenuación blanca pura)
     assert_eq!(attenuation, Vec3A::ONE);
@@ -50,7 +50,7 @@ fn test_dielectric_total_internal_reflection_edge_case() {
         material: &mock_mat,
     };
 
-    let (_, ray_scattered) = vidrio.scatter(&ray_in, &rec).unwrap();
+    let (_, ray_scattered) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
 
     // Caso límite físico: En este ángulo, la Ley de Snell daría un seno de refracción > 1.0 (Imposible).
     // El motor debe forzar Reflexión Interna Total. El rayo debe rebotar hacia abajo (Y negativa).
@@ -84,7 +84,7 @@ fn test_schlick_approximation_reflectance_limits() {
     let iteraciones = 200;
     
     for _ in 0..iteraciones {
-        let (_, ray) = vidrio.scatter(&ray_in, &rec).unwrap();
+        let (_, ray) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
         if ray.direction.y > 0.0 {
             reflejados += 1;
         }

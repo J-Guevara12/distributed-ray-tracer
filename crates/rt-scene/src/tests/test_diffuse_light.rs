@@ -14,7 +14,7 @@ fn setup_dummy_hit_record() -> HitRecord<'static> {
     #[derive(Debug)]
     struct DummyMaterial;
     impl crate::Material for DummyMaterial {
-        fn scatter(&self, _: &Ray, _: &HitRecord) -> Option<(Vec3, Ray)> {
+        fn scatter(&self, _: &Ray, _: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Vec3, Ray)> {
             None
         }
     }
@@ -42,7 +42,7 @@ fn test_scatter_returns_none() {
     };
     let rec = setup_dummy_hit_record();
 
-    let scatter_result = light_material.scatter(&ray_in, &rec);
+    let scatter_result = light_material.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0));
 
     assert!(
         scatter_result.is_none(),

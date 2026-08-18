@@ -23,7 +23,7 @@ fn test_camera_center_ray_direction() {
 
     // El rayo del centro exacto de la pantalla (con sample 0 para evitar aleatoriedad)
     // Para una imagen de 400x225 (aprox 16:9), el centro está cerca de x=200, y=112
-    let ray = camera.get_ray(200, 112, 0);
+    let ray = camera.get_ray(200, 112, 0, &mut rng());
 
     // La dirección debe apuntar hacia el frente (Z negativo)
     assert!(ray.direction.z < 0.0, "El rayo debe apuntar hacia adelante");
@@ -39,10 +39,10 @@ fn test_camera_ray_normalization() {
 
     // Esquinas de la pantalla
     let rays = vec![
-        camera.get_ray(0, 0, 0),
-        camera.get_ray(399, 0, 0),
-        camera.get_ray(0, 224, 0),
-        camera.get_ray(399, 224, 0),
+        camera.get_ray(0, 0, 0, &mut rng()),
+        camera.get_ray(399, 0, 0, &mut rng()),
+        camera.get_ray(0, 224, 0, &mut rng()),
+        camera.get_ray(399, 224, 0, &mut rng()),
     ];
 
     for ray in rays {
@@ -53,4 +53,8 @@ fn test_camera_ray_normalization() {
             length
         );
     }
+}
+
+fn rng() -> fastrand::Rng {
+    fastrand::Rng::with_seed(0)
 }

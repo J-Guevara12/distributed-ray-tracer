@@ -1,7 +1,12 @@
+use fastrand::Rng;
 use rt_core::{Color, Interval, Ray, background::Background};
 use rt_scene::Hittable;
 
 use crate::stats::RayStats;
+pub struct RayContext {
+    pub rng: Rng,
+    pub stats: RayStats,
+}
 
 pub trait RayTracer: Send + Sync + 'static {
     fn trace_ray(
@@ -9,7 +14,7 @@ pub trait RayTracer: Send + Sync + 'static {
         ray: Ray,
         world: &dyn Hittable,
         background: &Background,
-        stats: &mut RayStats,
+        context: &mut RayContext,
     ) -> Color;
 }
 
@@ -21,11 +26,11 @@ impl RayTracer for NormalTracer {
         ray: Ray,
         world: &dyn Hittable,
         background: &Background,
-        stats: &mut RayStats,
+        context: &mut RayContext,
     ) -> Color {
         let interval = Interval::new(0.0, f32::INFINITY);
 
-        stats.rays += 1;
+        context.stats.rays += 1;
         if let Some(rec) = world.hit(&ray, interval) {
             // Las mapeamos linealmente a [0.0, 1.0] para convertirlas en color.
             let r = 0.5 * (rec.normal.x + 1.0);
@@ -54,7 +59,7 @@ impl RayTracer for PathTracer {
         ray: Ray,
         world: &dyn Hittable,
         background: &Background,
-        stats: &mut RayStats,
+        context: &mut RayContext,
     ) -> Color {
         let mut current_ray = ray;
 
@@ -65,13 +70,13 @@ impl RayTracer for PathTracer {
         for _ in 0..self.max_depth {
             let interval = Interval::new(0.001, f32::INFINITY);
 
-            stats.rays += 1;
+            context.stats.rays += 1;
             if let Some(rec) = world.hit(&current_ray, interval) {
                 let emitted = rec.material.emitted(rec.normal[0], rec.normal[0], rec.p);
                 accumulated_light += attenuation * emitted;
 
                 if let Some((attenuation_material, scattered_ray)) =
-                    rec.material.scatter(&current_ray, &rec)
+                    rec.material.scatter(&current_ray, &rec, &mut context.rng)
                 {
                     attenuation *= attenuation_material;
                     current_ray = scattered_ray;

@@ -10,6 +10,7 @@ use rt_scene::{
 };
 
 use crate::stats::RayStats;
+use crate::tracers::RayContext;
 use crate::tracers::{NormalTracer, PathTracer, RayTracer};
 
 // =========================================================================
@@ -24,7 +25,7 @@ struct PredictableMaterial {
 }
 
 impl Material for PredictableMaterial {
-    fn scatter(&self, _ray_in: &Ray, rec: &HitRecord) -> Option<(Color, Ray)> {
+    fn scatter(&self, _ray_in: &Ray, rec: &HitRecord, _rng: &mut fastrand::Rng) -> Option<(Color, Ray)> {
         Some((self.albedo, Ray::new(rec.p, self.forced_direction)))
     }
 }
@@ -75,7 +76,7 @@ fn test_tracer_fallback_to_gradient_on_miss() {
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
     let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
 
-    let color = tracer.trace_ray(ray, world.as_ref(), &background, &mut RayStats::default());
+    let color = tracer.trace_ray(ray, world.as_ref(), &background, &mut ctx());
 
     // En Y = 1.0 puro, el gradiente debe devolver exactamente el color superior [0.5, 0.7, 1.0]
     assert_eq!(color[2], 1.0);
@@ -95,7 +96,7 @@ fn test_tracer_renders_normal_on_hit() {
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
 
     let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
-    let color = tracer.trace_ray(ray, &world, &background, &mut RayStats::default());
+    let color = tracer.trace_ray(ray, &world, &background, &mut ctx());
 
     // En el centro exacto, la normal mapeada (N + 1) * 0.5 debe dar:
     // X=0 -> 0.5, Y=0 -> 0.5, Z=1 -> 1.0
@@ -119,7 +120,7 @@ fn test_path_tracer_max_depth_returns_black() {
     let ray = Ray::new(Point3::new(0.0, 1.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
     let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
     
-    let mut stats = RayStats::default();
+    let mut stats = ctx();
     let color_resultado = tracer.trace_ray(ray, &world, &background, &mut stats);
 
     assert_eq!(
@@ -129,7 +130,7 @@ fn test_path_tracer_max_depth_returns_black() {
     );
 
     assert_eq!(
-        stats.rays, 5,
+        stats.stats.rays, 5,
         "un camino que siempre acierta traza un segmento por nivel de profundidad"
     );
 }
@@ -193,14 +194,14 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
     let sky_color = Color::new(0.5, 0.7, 1.0);
     let background = Background::new_gradient(sky_color, sky_color);
 
-    let mut stats = RayStats::default();
+    let mut stats = ctx();
     let color_final = tracer.trace_ray(ray, &world, &background, &mut stats);
 
     let final_hits = world.hit_count.load(Ordering::Relaxed);
     assert_eq!(final_hits, 3, "El rayo debió golpear exactamente 3 veces");
 
     assert_eq!(
-        stats.rays, 4,
+        stats.stats.rays, 4,
         "3 impactos más el segmento que escapa al fondo"
     );
 
@@ -229,7 +230,7 @@ fn test_path_tracer_miss_returns_sky_gradient() {
 
     let ray_up = Ray::new(Point3::ZERO, Vec3::Y);
     let background = Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));
-    let color_up = tracer.trace_ray(ray_up, &world, &background, &mut RayStats::default());
+    let color_up = tracer.trace_ray(ray_up, &world, &background, &mut ctx());
 
     assert_eq!(
         color_up,
@@ -238,11 +239,15 @@ fn test_path_tracer_miss_returns_sky_gradient() {
     );
 
     let ray_down = Ray::new(Point3::ZERO, -Vec3::Y);
-    let color_down = tracer.trace_ray(ray_down, &world, &background, &mut RayStats::default());
+    let color_down = tracer.trace_ray(ray_down, &world, &background, &mut ctx());
 
     assert_eq!(
         color_down,
         Color::ONE,
         "La base del cielo debería ser blanca"
     );
+}
+
+fn ctx() -> RayContext {
+    RayContext { rng: fastrand::Rng::with_seed(0), stats: RayStats::default() }
 }

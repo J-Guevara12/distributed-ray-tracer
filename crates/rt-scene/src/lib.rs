@@ -1,3 +1,4 @@
+use fastrand::Rng;
 use rt_core::{Color, Interval, Point3, Ray, Vec3};
 use std::fmt::Debug;
 
@@ -51,7 +52,7 @@ pub trait Hittable: Send + Sync {
 }
 
 pub trait Material: Send + Sync + Debug {
-    fn scatter(&self, ray_in: &Ray, rec: &HitRecord) -> Option<(Vec3, Ray)>;
+    fn scatter(&self, ray_in: &Ray, rec: &HitRecord, rng: &mut Rng) -> Option<(Vec3, Ray)>;
 
     fn emitted(&self, _u: f32, _v: f32, _p: Point3) -> Color {
         Color::new(0.0, 0.0, 0.0)

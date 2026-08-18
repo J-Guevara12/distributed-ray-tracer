@@ -6,6 +6,7 @@ Línea = mediana, sombra = rango min-max de las repeticiones.
 Imprime la ruta del PNG por stdout; las notas van por stderr.
 """
 
+import argparse
 import json
 import statistics as st
 import sys
@@ -109,6 +110,40 @@ def pick_workload(rows):
     return {k: v[0] for k, v in best.items()}
 
 
+def select_labels(rows, start, back):
+    """Etiquetas a graficar, en orden cronológico. `start` acepta un
+    `commit_label` o un prefijo de SHA."""
+    order = {}
+    for r in rows:
+        order.setdefault(r["commit_label"], r["commit_date"])
+    labels = sorted(order, key=lambda l: order[l])
+
+    if start:
+        shas = defaultdict(set)
+        for r in rows:
+            shas[r["commit_label"]].add(r["commit"])
+
+        position = next(
+            (
+                i
+                for i, label in enumerate(labels)
+                if label == start or any(sha.startswith(start) for sha in shas[label])
+            ),
+            None,
+        )
+        if position is None:
+            raise SystemExit(
+                f"error: --from {start!r} no coincide con ningún label ni commit.\n"
+                f"disponibles: {', '.join(labels)}"
+            )
+        labels = labels[position:]
+
+    if back:
+        labels = labels[-back:]
+
+    return labels
+
+
 def series(rows, config, benchmark, key):
     by_label = defaultdict(list)
     order = {}
@@ -128,8 +163,35 @@ def series(rows, config, benchmark, key):
     )
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--from",
+        dest="start",
+        metavar="LABEL|SHA",
+        help="graficar desde este punto en adelante",
+    )
+    parser.add_argument(
+        "-b",
+        "--back",
+        type=int,
+        metavar="N",
+        help="quedarse solo con los últimos N commits",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     rows = load()
+
+    # El filtro va antes de elegir la carga: si pides los últimos N commits,
+    # quieres la revisión de manifiesto que esos N comparten.
+    selected = select_labels(rows, args.start, args.back)
+    rows = [r for r in rows if r["commit_label"] in set(selected)]
+    if not rows:
+        raise SystemExit("error: el filtro no dejó ningún registro")
+
     keep = pick_workload(rows)
 
     configs = ["quick", "full"]
@@ -176,7 +238,12 @@ def main():
                 )
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    fig.suptitle(f"Evolución del tiempo de render — {stamp}", fontsize=13)
+    scope = ""
+    if args.start:
+        scope += f"  desde {args.start}"
+    if args.back:
+        scope += f"  últimos {args.back}"
+    fig.suptitle(f"Evolución del tiempo de render — {stamp}{scope}", fontsize=13)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)

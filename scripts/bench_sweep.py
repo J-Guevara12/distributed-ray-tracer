@@ -67,7 +67,8 @@ COMMITS = [
     ("da1df30", "release-profile"),
     ("cf36400", "bvh-axis-fix"),
     ("d50313d", "framebuffer-f32"),
-    ("e80a41c", "head"),
+    ("e80a41c", "pre-benchmark"),
+    ("25618ca", "end-benchmark"),
 ]
 
 # El perfil hay que inyectarlo siempre: los commits viejos no traen

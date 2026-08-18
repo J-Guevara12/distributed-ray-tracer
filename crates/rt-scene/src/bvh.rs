@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cmp::Ordering, sync::Arc};
 
 use rt_core::{Interval, Vec3};
 
@@ -38,49 +38,37 @@ fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> u32 {
     }
 }
 
+fn centroid(object: &Arc<dyn Hittable>, axis: u32) -> f32 {
+    let b = object.bounding_box();
+    let i = match axis {
+        0 => b.x,
+        1 => b.y,
+        _ => b.z,
+    };
+    0.5 * (i.min + i.max)
+}
+
 impl BvhNode {
-    pub fn new(mut objects: Vec<Arc<dyn Hittable>>) -> Self {
-        let axis = longest_axis(&objects);
-
-        let comparator = |a: &Arc<dyn Hittable>, b: &Arc<dyn Hittable>| {
-            let box_a = a.bounding_box();
-            let box_b = b.bounding_box();
-
-            let (min_a, min_b) = match axis {
-                0 => (box_a.x.min, box_b.x.min),
-                1 => (box_a.y.min, box_b.y.min),
-                _ => (box_a.z.min, box_b.z.min)
-            };
-
-            min_a.partial_cmp(&min_b).unwrap_or(std::cmp::Ordering::Equal)
-        };
-
-        let object_span = objects.len();
-        let (left, right): (Arc<dyn Hittable>, Arc<dyn Hittable>) = match object_span {
+    pub fn build(mut objects: Vec<Arc<dyn Hittable>>) -> Arc<dyn Hittable> {
+        match objects.len() {
             0 => panic!("No se puede construir un BvhNode con 0 objetos"),
-            1 => {
-                (Arc::clone(&objects[0]), Arc::clone(&objects[0]))
-            }
-            2 => {
-                objects.sort_by(comparator);
-                (Arc::clone(&objects[0]), Arc::clone(&objects[1]))
-            }
+            1 => objects.pop().unwrap(),
             _ => {
-                objects.sort_by(comparator);
-                let mid = object_span/2;
+                let axis = longest_axis(&objects);
+                objects.sort_by(|a, b| centroid(a, axis).partial_cmp(&centroid(b, axis))
+                    .unwrap_or(Ordering::Equal));
 
-                let right_objects = objects.split_off(mid);
-                let left_objects = objects;
+                let right_objects = objects.split_off(objects.len()/2);
 
-                (
-                    Arc::new(BvhNode::new(left_objects)),
-                    Arc::new(BvhNode::new(right_objects))
-                )
+                let left = Self::build(objects);
+                let right = Self::build(right_objects);
+
+                let bbox = Aabb::surrounding_box(left.bounding_box(), right.bounding_box());
+
+                Arc::new(Self { left, right, bbox })
             }
-        };
-        let bbox = Aabb::surrounding_box(left.bounding_box(), right.bounding_box());
+        }
 
-        Self { left, right, bbox }
     }
 }
 

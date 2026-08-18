@@ -166,7 +166,7 @@ fn test_bvh_construction_single_object() {
     let objects: Vec<Arc<dyn Hittable>> = vec![obj];
 
     // Construir el nodo raíz con un único objeto
-    let bvh_root = BvhNode::new(objects);
+    let bvh_root = BvhNode::build(objects);
 
     // El algoritmo de Peter Shirley duplica la referencia en left y right cuando hay 1 solo objeto
     assert_eq!(bvh_root.bounding_box().x.min, -1.0);
@@ -185,7 +185,7 @@ fn test_bvh_construction_multiple_objects_sorting() {
     let obj_r = Arc::new(MockHittable::new(box_right, None));
 
     let objects: Vec<Arc<dyn Hittable>> = vec![obj_l, obj_c, obj_r];
-    let bvh_root = BvhNode::new(objects);
+    let bvh_root = BvhNode::build(objects);
 
     // La caja contenedora de la raíz debe englobar absolutamente todo el espacio de los extremos
     let root_box = bvh_root.bounding_box();
@@ -206,7 +206,7 @@ fn test_bvh_traversal_hit_and_short_circuit() {
 
     // Los metemos en el árbol BVH
     let objects: Vec<Arc<dyn Hittable>> = vec![close_obj, far_obj];
-    let bvh_root = BvhNode::new(objects);
+    let bvh_root = BvhNode::build(objects);
 
     // Lanzamos un rayo desde el origen hacia el fondo (-Z). Debería cruzar ambos objetos.
     let ray = Ray {
@@ -233,7 +233,7 @@ fn test_bvh_node_miss_optimization() {
         z: Interval::new(100.0, 102.0),
     };
     let obj = Arc::new(MockHittable::new(isolated_box, Some(Point3::new(101.0, 101.0, 101.0))));
-    let bvh_root = BvhNode::new(vec![obj]);
+    let bvh_root = BvhNode::build(vec![obj]);
 
     // Lanzamos un rayo en la dirección opuesta (al vacío de la escena)
     let ray_into_void = Ray {

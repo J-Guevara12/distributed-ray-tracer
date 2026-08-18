@@ -13,7 +13,7 @@ pub struct AppState {
     pub tx_stream: broadcast::Sender<rt_renderer::tiles::TilePatch>,
     pub is_finished: Arc<std::sync::atomic::AtomicBool>,
     pub camera: Arc<RwLock<Arc<Camera>>>,
-    pub world: Arc<RwLock<Arc<dyn Hittable + Send + Sync>>>,
+    pub world: Arc<RwLock<Arc<dyn Hittable>>>,
     pub display_params: Arc<RwLock<DisplayParams>>,
     pub scene_data: Arc<RwLock<Option<ScenePayload>>>,
     pub job_sender: mpsc::Sender<Job>,
@@ -32,9 +32,9 @@ impl AppState {
         let scene_data = ScenePayload::default();
 
         let hittable_list = HittableList::from(&scene_data);
-        let bvh = BvhNode::new(hittable_list.objects);
+        let bvh = BvhNode::build(hittable_list.objects);
 
-        let world = Arc::new(RwLock::new( Arc::new(bvh) as Arc<dyn Hittable + Send + Sync>));
+        let world = Arc::new(RwLock::new(bvh));
         let scene_data = Arc::new(RwLock::new(Some(scene_data)));
         let display_params = Arc::new(RwLock::new(DisplayParams::default()));
 

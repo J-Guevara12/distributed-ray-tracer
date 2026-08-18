@@ -58,7 +58,7 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
 
     let build_start = Instant::now();
     let list = HittableList::from(&bench.scene);
-    let world = BvhNode::new(list.objects);
+    let world = BvhNode::build(list.objects);
     let build_ms = build_start.elapsed().as_secs_f64() * 1000.0;
 
     let (width, height) = (camera.width, camera.height);
@@ -74,7 +74,7 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
         framebuffer,
         &on_tile,
         opts.tile_size,
-        &world,
+        &*world,
         &bench.scene.background,
     );
 

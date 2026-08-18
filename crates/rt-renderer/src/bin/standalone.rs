@@ -18,7 +18,7 @@ pub fn main() {
     let camera_config: CameraConfig = serde_json::from_reader(file_camera).unwrap();
 
     let hittable_list = HittableList::from(&scene_payload);
-    let world = BvhNode::new(hittable_list.objects);
+    let world = BvhNode::build(hittable_list.objects);
     let camera = Camera::new(camera_config);
 
     let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height));
@@ -34,7 +34,7 @@ pub fn main() {
         Arc::clone(&framebuffer),
         &on_tile,
         128,
-        &world,
+        &*world,
         &scene_payload.background,
     );
     println!("Procesado en {} ms", instant.elapsed().as_millis());

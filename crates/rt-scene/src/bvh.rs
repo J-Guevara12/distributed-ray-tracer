@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::sync::Arc;
 
 use rt_core::{Interval, Vec3};
 
@@ -39,14 +39,18 @@ fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> usize {
     }
 }
 
-fn centroid(object: &Arc<dyn Hittable>, axis: usize) -> f32 {
+// Ordena por el mínimo de la caja, no por el centroide. Sobre un eje que casi
+// no separa objetos, el centroide produce un orden espacialmente arbitrario
+// (en B2, ordenar por centroide en Y equivale a ordenar por radio, y cuesta un
+// 33%). El mínimo empata en ese caso y el sort estable conserva el orden de
+// entrada, que suele venir agrupado espacialmente.
+fn sort_key(object: &Arc<dyn Hittable>, axis: usize) -> f32 {
     let b = object.bounding_box();
-    let i = match axis {
-        0 => b.x,
-        1 => b.y,
-        _ => b.z,
-    };
-    0.5 * (i.min + i.max)
+    match axis {
+        0 => b.x.min,
+        1 => b.y.min,
+        _ => b.z.min,
+    }
 }
 
 impl BvhNode {
@@ -56,8 +60,7 @@ impl BvhNode {
             1 => objects.pop().unwrap(),
             _ => {
                 let axis = longest_axis(&objects);
-                objects.sort_by(|a, b| centroid(a, axis).partial_cmp(&centroid(b, axis))
-                    .unwrap_or(Ordering::Equal));
+                objects.sort_by(|a, b| sort_key(a, axis).total_cmp(&sort_key(b, axis)));
 
                 let right_objects = objects.split_off(objects.len()/2);
 

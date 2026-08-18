@@ -16,17 +16,17 @@ pub struct AppState {
     pub world: Arc<RwLock<Arc<dyn Hittable>>>,
     pub display_params: Arc<RwLock<DisplayParams>>,
     pub scene_data: Arc<RwLock<Option<ScenePayload>>>,
-    pub job_sender: mpsc::Sender<Job>,
-    pub active_jobs_counter: Arc<AtomicUsize>,
+    pub _job_sender: mpsc::Sender<Job>,
+    pub _active_jobs_counter: Arc<AtomicUsize>,
 }
 
 impl AppState {
-    pub fn init_default(n_channels: usize, job_sender: mpsc::Sender<Job>) -> Self {
+    pub fn init_default(n_channels: usize, _job_sender: mpsc::Sender<Job>) -> Self {
         let camera = Arc::new(Camera::default());
         let framebuffer = Arc::new(FrameBuffer::new(camera.width, camera.height));
         let (tx_stream, _) = broadcast::channel(n_channels);
         let is_finished = Arc::new(AtomicBool::new(true));
-        let active_jobs_counter = Arc::new(AtomicUsize::new(0));
+        let _active_jobs_counter = Arc::new(AtomicUsize::new(0));
 
         let camera = Arc::new(RwLock::new(camera));
         let scene_data = ScenePayload::default();
@@ -46,8 +46,8 @@ impl AppState {
             world,
             display_params,
             scene_data,
-            job_sender,
-            active_jobs_counter,
+            _job_sender,
+            _active_jobs_counter,
         }
     }
 }

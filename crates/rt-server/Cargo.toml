@@ -20,6 +20,8 @@ tower-http = { version = "0.6.11", features = ["cors"] }
 tracing-appender = "0.2.5"
 serde = "1.0.228"
 optional_struct = "0.5.2"
+anyhow = "1.0.104"
+parking_lot = "0.12.5"
 
 [dev-dependencies]
 axum-test = "20.1.0"

@@ -8,7 +8,7 @@ mod router;
 mod state;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()>{
     let (non_blocking, _guard) = tracing_appender::non_blocking(std::io::stdout());
     let (tx, _) = tokio::sync::mpsc::channel(1000);
 
@@ -23,10 +23,12 @@ async fn main() {
     let app = setup_app(Router::new(), state);
 
     let addr = SocketAddr::from(([127, 0, 1, 1], 3000));
-    println!("Servidor de pruebas corriendo en http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.expect("Port 3000 is already being used");
+    println!("Rendering server ready at http://{}", addr);
+
+    axum::serve(listener, app).await.expect("Could not start axum web server");
+    Ok(())
 }
 
 #[cfg(test)]

@@ -54,7 +54,7 @@ impl FrameBuffer {
         let data = self.data.read().unwrap();
         let expected_size = (self.width * self.height * 3) as usize;
 
-        let file = File::create(path).unwrap();
+        let file = File::create(path)?;
 
         let w = &mut BufWriter::new(file);
         let encoder = image::codecs::png::PngEncoder::new(w);
@@ -67,8 +67,7 @@ impl FrameBuffer {
             self.width,
             self.height,
             image::ExtendedColorType::Rgb8,
-        )
-        .unwrap();
+        )?;
 
         Ok(())
     }

@@ -11,11 +11,11 @@ pub fn main() {
     let path_scene = "scenes/spheres_scene.json";
     let path_camera = "scenes/spheres_camera.json";
 
-    let file_scene = File::open(path_scene).expect("Error abriendo el archivo de la escena");
-    let scene_payload: ScenePayload = serde_json::from_reader(file_scene).unwrap();
+    let file_scene = File::open(path_scene).expect("Error when opening spheres_scene.json file");
+    let scene_payload: ScenePayload = serde_json::from_reader(file_scene).expect("Error when parsing spheres_scene.json file");
 
-    let file_camera = File::open(path_camera).expect("Error abriendo el archivo de la cámara");
-    let camera_config: CameraConfig = serde_json::from_reader(file_camera).unwrap();
+    let file_camera = File::open(path_camera).expect("Error when opening spheres_scene.json file");
+    let camera_config: CameraConfig = serde_json::from_reader(file_camera).expect("Error when parsing spheres_scene.json file");
 
     let hittable_list = HittableList::from(&scene_payload);
     let world = BvhNode::build(hittable_list.objects);
@@ -39,5 +39,5 @@ pub fn main() {
     );
     println!("Procesado en {} ms", instant.elapsed().as_millis());
     let display_params = DisplayParams::default();
-    framebuffer.save_png("result.png", &display_params).unwrap();
+    framebuffer.save_png("result.png", &display_params).expect("Error when saving result.png");
 }

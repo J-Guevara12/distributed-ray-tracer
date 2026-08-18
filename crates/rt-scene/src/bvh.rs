@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use rt_core::{Interval, Vec3};
 
-use crate::{Hittable, aabb::Aabb};
+use crate::{Hittable, aabb::Aabb, hittable_list::HittableList};
 
 pub struct BvhNode {
     left: Arc<dyn Hittable>,
@@ -56,7 +56,7 @@ fn sort_key(object: &Arc<dyn Hittable>, axis: usize) -> f32 {
 impl BvhNode {
     pub fn build(mut objects: Vec<Arc<dyn Hittable>>) -> Arc<dyn Hittable> {
         match objects.len() {
-            0 => panic!("No se puede construir un BvhNode con 0 objetos"),
+            0 => Arc::new(HittableList::new()),
             1 => objects.pop().unwrap(),
             _ => {
                 let axis = longest_axis(&objects);

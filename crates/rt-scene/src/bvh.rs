@@ -7,10 +7,11 @@ use crate::{Hittable, aabb::Aabb};
 pub struct BvhNode {
     left: Arc<dyn Hittable>,
     right: Arc<dyn Hittable>,
-    bbox: Aabb
+    bbox: Aabb,
+    axis: usize,
 }
 
-fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> u32 {
+fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> usize {
     let mut low = Vec3::splat(f32::INFINITY);
     let mut high = Vec3::splat(f32::NEG_INFINITY);
 
@@ -38,7 +39,7 @@ fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> u32 {
     }
 }
 
-fn centroid(object: &Arc<dyn Hittable>, axis: u32) -> f32 {
+fn centroid(object: &Arc<dyn Hittable>, axis: usize) -> f32 {
     let b = object.bounding_box();
     let i = match axis {
         0 => b.x,
@@ -65,7 +66,7 @@ impl BvhNode {
 
                 let bbox = Aabb::surrounding_box(left.bounding_box(), right.bounding_box());
 
-                Arc::new(Self { left, right, bbox })
+                Arc::new(Self { left, right, bbox, axis })
             }
         }
 
@@ -78,19 +79,17 @@ impl Hittable for BvhNode {
             return None
         }
 
-        let hit_left = self.left.hit(ray, ray_t);
-        let mut current_max = ray_t.max;
+        let (near, far) = match ray.direction[self.axis] < 0.0 {
+            true => (&self.right, &self.left),
+            false => (&self.left, &self.right),
+        };
 
-        if let Some(ref rec) = hit_left {
-            current_max = rec.t
-        }
+        let hit_near = near.hit(ray, ray_t);
+        let max = hit_near.as_ref().map_or(ray_t.max, |rec| rec.t);
 
-        let hit_right = self.right.hit(ray, Interval::new(ray_t.min, current_max));
-        if hit_right.is_some() {
-            hit_right
-        } else {
-            hit_left
-        }
+        let hit_far = far.hit(ray, Interval::new(ray_t.min, max));
+
+        hit_far.or(hit_near)
     }
 
     fn bounding_box(&self) -> Aabb {

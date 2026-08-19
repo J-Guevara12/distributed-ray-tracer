@@ -56,6 +56,20 @@ pesa relativamente menos.
 `quick` sirve para detectar la dirección del cambio, no para predecir su
 magnitud en `full`.
 
+### Una métrica mal definida apunta al revés
+
+`TileSummary::imbalance` es `(max - media) / media`: cuánto se despega el peor
+tile del promedio. Eso mide **heterogeneidad del contenido**, no hilos ociosos, y
+sube con tiles chicos por construcción. En la barrida de `tile_size` marcaba a
+256 px como el mejor repartido justo cuando era el más lento.
+
+Lo que hay que medir es si sobran hilos sin trabajo:
+
+    eficiencia = suma(tiempos de tile) / (hilos × tiempo de pared)
+
+La suma se recupera del resumen que ya se guarda: `media = max / (1 + imbalance)`.
+Antes de creerle a una métrica, escribir qué pasa en los dos extremos.
+
 ### `rays/s` no es una constante de hardware
 
 Es por escena. Un "rayo" es una consulta de intersección, y su costo depende de
@@ -109,6 +123,29 @@ de hecho 2% *peor* que centroide.
 Ninguna clave de orden es buena universalmente. El arreglo de fondo es SAH
 binned sobre posiciones de corte, que no depende de la clave.
 
+### La cuantización de tiles sobre hilos domina cualquier efecto de caché
+
+`tile_size` 128 → 32 dio **−12.9% en B1 y −9.0% en B2** sin tocar el renderer.
+No es localidad: es que la última ronda de planificación corre a medias.
+
+| B1 | tiles | rondas de 24 | util. predicha | eficiencia medida |
+|---|---|---|---|---|
+| 32 | 1024 | 43 | 99.2% | 98.5% |
+| 128 | 64 | 3 | 88.9% | 83.5% |
+| 256 | 16 | 1 | 66.7% | 54.9% |
+
+Con 256 px hay 16 tiles para 24 hilos: ocho no tocan la escena. El modelo
+`n / (ceil(n/hilos) × hilos)` predice las cinco mediciones de las dos escenas.
+
+Y el efecto contrario existe pero pierde por goleada: con tiles de 256 px el
+trabajo **total** de CPU baja 14% (293 s contra 342 s) por mejor localidad y
+menos locks, y aun así el reloj sube 54%. Ese 14% es lo que dejaría sobre la
+mesa un scheduler capaz de partir tiles a demanda — insumo para F5.4.
+
+16 y 32 empatan dentro del ruido. Entre empatados gana el mayor: `write_tile`
+toma un write-lock sobre el framebuffer entero, así que menos tiles es menos
+contención.
+
 ### Contadores atómicos en el bucle caliente cuestan 30–40×
 
 Un `fetch_add(1, Relaxed)` por nodo visitado, desde 24 hilos sobre la misma
@@ -145,6 +182,36 @@ la **carga real** (`scene_hash`, `camera_hash`, `width`, `spp`) y no por el hash
 del manifiesto, con una tabla histórica para los registros anteriores a que
 `width`/`spp` estuvieran en el registro.
 
+### El hash de imagen no es una identidad estable
+
+Dos aceleradores correctos pueden dar imágenes distintas. En B1 el BVH plano
+cambió 13 píxeles de 1 048 576 respecto del árbol anterior, y el hash de `full`
+se movió mientras el de `quick` no.
+
+La causa es geométrica: donde dos paredes perpendiculares comparten arista, un
+rayo que da justo en la arista **intersecta los dos quads con el mismo `t`
+exacto**. `PlanarShape::hit` usa `contains` (inclusivo), así que gana el que se
+pruebe último, y eso lo decide el orden de recorrido. Las esferas usan
+`surrounds` (exclusivo) y rechazan el empate — por eso B2 nunca se movió.
+
+Los píxeles afectados caen todos sobre la diagonal de la imagen porque la cámara
+de B1 está en `(278, 278, -800)`, simétrica sobre una caja de `555³`: la arista
+`(0, 0, z)` se proyecta desde una esquina hasta el punto de fuga central.
+
+No hay nada que arreglar. Ninguno de los dos desempates es correcto y las
+paredes adyacentes tienen que compartir arista. Pero el hash va a seguir
+moviéndose cada vez que se toque el recorrido, así que **no sirve como reja de
+regresión**. El invariante que sí sirve está en `test_bvh_matches_linear_scan`.
+
+### `quick` no alcanza como reja de regresión de imagen
+
+El cambio de arriba lo detectó `full` (200 spp) y no `quick` (8 spp). Todas las
+verificaciones de "hash intacto" de F0.6 y F0.8 se habían hecho solo con `quick`.
+
+Con la semilla por `(píxel, sample)`, las muestras `0..7` son los mismos rayos a
+8 spp que a 200 spp, así que `quick` es un subconjunto estricto de `full`: puede
+confirmar que algo cambió, nunca que nada cambió.
+
 ### Las escenas de benchmark son inmutables
 
 `bench.toml` es la única fuente de verdad de la carga; `camera.json` guarda solo
@@ -157,6 +224,29 @@ sin `width`/`spp` en el registro los dos grupos eran indistinguibles.
 ---
 
 ## Tests
+
+### El invariante de un acelerador es igualar al barrido lineal
+
+Un BVH es una optimización, así que tiene que devolver exactamente lo mismo que
+revisar todas las primitivas. Eso es verificable y no depende de ninguna escena
+de benchmark: `test_bvh_matches_linear_scan` dispara rayos aleatorios contra
+`LinearScan` y compara `t`, material y normal bit a bit.
+
+Es lo que convirtió una sospecha en un diagnóstico. Con 20 millones de rayos y
+cero discrepancias quedó descartado que el BVH estuviera mal, y las 398
+discrepancias que sí aparecieron con los rayos primarios señalaron la causa real
+en una corrida.
+
+### Una hipótesis plausible no es un diagnóstico
+
+Ante los 13 píxeles de B1 la explicación obvia era que las bases de las cajas del
+Cornell box son coplanares con el piso — lo son, se verifica en el JSON de la
+escena. Quitarlas no cambió **ni un píxel**: la causa eran las aristas de la
+caja, otra coincidencia distinta.
+
+El costo de comprobar era una corrida de 10 segundos. Comprobar siempre la
+hipótesis antes de escribirla en el reporte, sobre todo cuando encaja demasiado
+bien.
 
 ### Un test que pasa por suerte de ordenamiento es peor que ningún test
 

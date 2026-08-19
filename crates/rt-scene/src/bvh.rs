@@ -45,11 +45,7 @@ fn longest_axis(primitives: &[Primitive]) -> usize {
 
     for primitive in primitives {
         let b = primitive.bounding_box();
-        let centroid = Vec3::new(
-            0.5 * (b.x.min + b.x.max),
-            0.5 * (b.y.min + b.y.max),
-            0.5 * (b.z.min + b.z.max),
-        );
+        let centroid = 0.5 * (b.min + b.max);
         low = low.min(centroid);
         high = high.max(centroid);
     }

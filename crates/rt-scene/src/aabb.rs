@@ -1,66 +1,45 @@
-use rt_core::{Interval, Point3, Ray};
+use rt_core::{Interval, Point3, Ray, Vec3};
 
 #[derive(Clone, Copy, Default)]
 pub struct Aabb {
-    pub x: Interval,
-    pub y: Interval,
-    pub z: Interval,
+    pub min: Vec3,
+    pub max: Vec3,
 }
 
 impl Aabb {
-    pub fn hit(&self, ray: &Ray, mut ray_t: Interval) -> bool {
-        for axis in 0..3 {
-            let ax_interval = match axis {
-                0 => self.x,
-                1 => self.y,
-                _ => self.z,
-            };
+    pub fn hit(&self, ray: &Ray, ray_t: Interval) -> bool {
+        let t0 = (self.min - ray.origin) * ray.inv_dir;
+        let t1 = (self.max - ray.origin) * ray.inv_dir;
 
-            let inv_d = ray.inv_dir[axis];
-            let origin = ray.origin[axis];
+        let t_near = t0.min(t1);                          // el swap, sin rama
+        let t_far  = t0.max(t1);
 
-            let mut t0 = (ax_interval.min - origin) * inv_d;
-            let mut t1 = (ax_interval.max - origin) * inv_d;
+        let t_enter = t_near.max_element().max(ray_t.min);
+        let t_exit  = t_far.min_element().min(ray_t.max);
 
-            if inv_d < 0.0 {
-                std::mem::swap(&mut t0, &mut t1);
-            }
-
-            if t0 > ray_t.min { ray_t.min = t0; }
-            if t1 < ray_t.max { ray_t.max = t1; }
-
-            if ray_t.max <= ray_t.min {
-                return false
-            }
-        }
-
-        true
+        t_enter <= t_exit
     }
 
     pub fn surrounding_box(left: Aabb, right: Aabb) -> Self {
-        let x = Interval::new(left.x.min.min(right.x.min), left.x.max.max(right.x.max));
-        let y = Interval::new(left.y.min.min(right.y.min), left.y.max.max(right.y.max));
-        let z = Interval::new(left.z.min.min(right.z.min), left.z.max.max(right.z.max));
+        let min = left.min.min(right.min);
+        let max = left.max.max(right.max);
 
-        Self { x, y, z }
+        Self { min, max }
     
     }
 
     pub fn pad_delta(&self) -> Self {
-        let delta = 0.0001; // Pequeño margen para dar volumen al AABB
-        
-        let new_x = if self.x.size() < delta { self.x.expand(delta) } else { self.x };
-        let new_y = if self.y.size() < delta { self.y.expand(delta) } else { self.y };
-        let new_z = if self.z.size() < delta { self.z.expand(delta) } else { self.z };
+        let delta = Vec3::splat(0.0001);
+        let degenerate = (self.max - self.min).cmplt(delta);
+        let pad = Vec3::select(degenerate, delta, Vec3::ZERO);
 
-        Self { x: new_x, y: new_y, z: new_z }
+        Self { min: self.min - pad, max: self.max + pad }
     }
 
     pub fn from_points(a: Point3, b: Point3) -> Self {
         Self {
-            x: Interval::new(a.x.min(b.x), a.x.max(b.x)),
-            y: Interval::new(a.y.min(b.y), a.y.max(b.y)),
-            z: Interval::new(a.z.min(b.z), a.z.max(b.z)),
+            min: a.min(b),
+            max: a.max(b),
         }
     }
 }

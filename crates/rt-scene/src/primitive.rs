@@ -33,9 +33,9 @@ impl Primitive {
     pub fn sort_key(&self, axis: usize) -> f32 {
         let b = self.bounding_box();
         match axis {
-            0 => b.x.min,
-            1 => b.y.min,
-            _ => b.z.min,
+            0 => b.min.x,
+            1 => b.min.y,
+            _ => b.min.z,
         }
     }
 }

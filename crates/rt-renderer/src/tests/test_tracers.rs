@@ -50,9 +50,8 @@ impl Hittable for AlwaysHit {
 
     fn bounding_box(&self) -> Aabb {
         Aabb {
-            x: Interval::new(-1.0, 1.0),
-            y: Interval::new(-1.0, 1.0),
-            z: Interval::new(-1.0, 1.0),
+            min: Vec3::splat(-1.0),
+            max: Vec3::splat(1.0)
         }
     }
 }
@@ -137,9 +136,8 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
 
         fn bounding_box(&self) -> Aabb {
             Aabb {
-                x: Interval::new(-1.0, 1.0),
-                y: Interval::new(-1.0, 1.0),
-                z: Interval::new(-1.0, 1.0),
+                min: Vec3::splat(-1.0),
+                max: Vec3::splat(1.0)
             }
         }
     }

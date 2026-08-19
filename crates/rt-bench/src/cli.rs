@@ -47,11 +47,15 @@ pub struct RunArgs {
     /// Defaults to the short HEAD sha, or "workdir" when the tree is dirty
     #[arg(long)]
     pub label: Option<String>,
-    /// Defaults match the values hardcoded in `standalone`, which is what the
-    /// historical sweep measured — changing them breaks comparability.
+    /// Matches the value hardcoded in `standalone`, which is what the
+    /// historical sweep measured — changing it breaks comparability.
     #[arg(long, default_value_t=15)]
     pub max_depth: u32,
-    #[arg(long, default_value_t=128)]
+    /// 128 until 2026-08-18. The sweep measured 32 at 98.5% parallel efficiency
+    /// against 83.5% for 128: with 24 threads, 128px tiles leave the last
+    /// scheduling round short. Records before the change are not comparable;
+    /// `env.tile_size` tells them apart.
+    #[arg(long, default_value_t=32)]
     pub tile_size: u32,
     #[arg(long, default_value_t="./bench/history.jsonl".to_string())]
     pub out: String,

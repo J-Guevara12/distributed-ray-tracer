@@ -80,7 +80,7 @@ pub async fn post_render(
             tracer,
             fb_worker,
             &on_tile,
-            payload.tile_size.unwrap_or(128),
+            payload.tile_size.unwrap_or(32),
             &world,
         );
     });

@@ -114,7 +114,7 @@ Usage: rt-bench run [OPTIONS]
       --cooldown <COOLDOWN>    seconds between runs    [default: 20]
       --label <LABEL>          [default: short HEAD sha, or "workdir" if dirty]
       --max-depth <MAX_DEPTH>  [default: 15]
-      --tile-size <TILE_SIZE>  [default: 128]
+      --tile-size <TILE_SIZE>  [default: 32]
       --out <OUT>              [default: ./bench/history.jsonl]
       --no-record              measure and print without writing
       --allow-dirty            allow measuring an uncommitted tree
@@ -122,10 +122,17 @@ Usage: rt-bench run [OPTIONS]
 
 ### Options that need care
 
-**`--max-depth` and `--tile-size`.** The defaults (15 and 128) are the values
-hardcoded in `standalone`, which is what the historical sweep measured.
-Changing them produces numbers that cannot be compared against the 96 existing
-historical records. Change them deliberately or not at all.
+**`--max-depth`.** Defaults to 15, the value hardcoded in `standalone`, which is
+what the historical sweep measured. Changing it produces numbers that cannot be
+compared against the existing historical records.
+
+**`--tile-size`.** Defaults to 32 since 2026-08-18; it was 128 before, and
+records on either side of that line are not comparable. `env.tile_size` in the
+JSONL tells them apart. The sweep (`scripts/tile_sweep.py`) measured 32 at 98.5%
+parallel efficiency against 83.5% for 128 on 24 threads: with 128px tiles B1
+yields 64 tiles, so the third and last scheduling round runs on 16 of 24
+threads. `standalone` still hardcodes 128 on purpose, so the historical sweep
+stays reproducible.
 
 **`--cooldown`.** This is a laptop with hybrid P/E cores that throttles under
 sustained load. Dropping the cooldown from 20 s to 5 s raised B2's relative

@@ -50,9 +50,37 @@ impl HitRecord {
     }
 }
 
+/// Trabajo del recorrido, acumulado por hilo. Nunca atómicos: con 24 hilos un
+/// `fetch_add` por nodo cuesta un orden de magnitud más que el recorrido mismo.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TraversalStats {
+    /// Nodos cuyo AABB se testeó.
+    pub node_visits: u64,
+    /// Primitivas contra las que se hizo el test de intersección real.
+    pub prim_tests: u64,
+}
+
+impl TraversalStats {
+    pub fn merge(&mut self, other: &Self) {
+        self.node_visits += other.node_visits;
+        self.prim_tests += other.prim_tests;
+    }
+}
+
 pub trait Hittable: Send + Sync {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>;
     fn bounding_box(&self) -> Aabb;
+
+    /// Igual que `hit`, contando el trabajo. Solo las estructuras de
+    /// aceleración lo sobreescriben; para una primitiva no hay nada que contar.
+    fn hit_counted(
+        &self,
+        ray: &Ray,
+        ray_t: Interval,
+        _stats: &mut TraversalStats,
+    ) -> Option<HitRecord> {
+        self.hit(ray, ray_t)
+    }
 }
 
 /// Geometría más los materiales que sus primitivas indexan. El array vive

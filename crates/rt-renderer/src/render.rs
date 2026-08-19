@@ -1,6 +1,6 @@
 use fastrand::Rng;
 use rayon::prelude::*;
-use rt_scene::Scene;
+use rt_scene::{Scene, TraversalStats};
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{Level, span};
@@ -40,7 +40,7 @@ pub fn render_scene<T: RayTracer>(
     let width = camera.width;
     let tiles: Vec<_> = generator.collect();
 
-    let per_tile: Vec<(u64, f64)> = tiles
+    let per_tile: Vec<(RayStats, f64)> = tiles
         .par_iter()
         .map(|tile| {
             let mut ctx = RayContext {
@@ -87,12 +87,18 @@ pub fn render_scene<T: RayTracer>(
             framebuffer.write_tile(&result);
             on_tile(&result);
 
-            (ctx.stats.rays, elapsed_ms)
+            (ctx.stats, elapsed_ms)
         })
         .collect();
 
+    let mut traversal = TraversalStats::default();
+    for (stats, _) in &per_tile {
+        traversal.merge(&stats.traversal);
+    }
+
     RenderStats {
-        rays: per_tile.iter().map(|(rays, _)| *rays).sum(),
+        rays: per_tile.iter().map(|(stats, _)| stats.rays).sum(),
+        traversal,
         tile_ms: per_tile.iter().map(|(_, ms)| *ms).collect(),
     }
 }

@@ -32,6 +32,8 @@ struct Timing {
     wall_ms: u128,
     rays: u64,
     samples: u64,
+    node_visits: u64,
+    prim_tests: u64,
     tile_ms: Vec<f64>,
     image_hash: String,
 }
@@ -39,6 +41,14 @@ struct Timing {
 impl Timing {
     fn secs(&self) -> f64 {
         self.wall_ms as f64 / 1000.0
+    }
+
+    fn nodes_per_ray(&self) -> f64 {
+        if self.rays == 0 { 0.0 } else { self.node_visits as f64 / self.rays as f64 }
+    }
+
+    fn prims_per_ray(&self) -> f64 {
+        if self.rays == 0 { 0.0 } else { self.prim_tests as f64 / self.rays as f64 }
     }
 
     fn rays_per_sec(&self) -> f64 {
@@ -89,6 +99,8 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
         wall_ms: render_start.elapsed().as_millis(),
         rays: stats.rays,
         samples: width as u64 * height as u64 * workload.spp as u64,
+        node_visits: stats.traversal.node_visits,
+        prim_tests: stats.traversal.prim_tests,
         tile_ms: stats.tile_ms,
         image_hash: env::image_sha(&snapshot_source.get_snapshot()),
     }
@@ -151,11 +163,13 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
             let workload = bench.workload(opts.kind);
 
             println!(
-                "  [rep {rep}] {} {} ms  {:.2} Mray/s  {:.2} Msmp/s (build {:.2} ms){}",
+                "  [rep {rep}] {} {} ms  {:.2} Mray/s  {:.2} Msmp/s  {:.1} nod/ray  {:.2} prim/ray (build {:.2} ms){}",
                 bench.manifest.id,
                 timing.wall_ms,
                 timing.rays_per_sec() / 1e6,
                 timing.samples_per_sec() / 1e6,
+                timing.nodes_per_ray(),
+                timing.prims_per_ray(),
                 timing.build_ms,
                 mhz.map(|m| format!("  {m:.0} MHz")).unwrap_or_default(),
             );
@@ -177,8 +191,8 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 rays_per_sec: Some(timing.rays_per_sec()),
                 samples: Some(timing.samples),
                 samples_per_sec: Some(timing.samples_per_sec()),
-                node_visits: None,
-                prim_tests: None,
+                node_visits: Some(timing.node_visits),
+                prim_tests: Some(timing.prim_tests),
                 image_hash: Some(timing.image_hash.clone()),
                 mse: None,
                 cpu_mhz: mhz,
@@ -234,11 +248,11 @@ fn check_determinism(benches: &[Benchmark], records: &[Record]) {
 fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
     println!("\n== summary ==");
     println!(
-        "  {:<5} {:<15} {:>11} {:>5} {:>10} {:>6} {:>3} {:>8} {:>8} {:>7} {:>6} {:>10}",
+        "  {:<5} {:<15} {:>11} {:>5} {:>10} {:>6} {:>3} {:>8} {:>8} {:>7} {:>8} {:>8} {:>6} {:>10}",
         "ID", "name", "resolution", "spp", "render", "rsd", "n", "Mray/s", "Msmp/s", "ray/smp",
-        "imbal", "image"
+        "nod/ray", "prim/ray", "imbal", "image"
     );
-    println!("  {}", "-".repeat(111));
+    println!("  {}", "-".repeat(129));
 
     for bench in benches {
         let id = &bench.manifest.id;
@@ -270,9 +284,21 @@ fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
             _ => None,
         });
         let imbalance = of(|r| r.tiles.as_ref().map(|t| t.imbalance));
+        let per_ray = |pick: fn(&Record) -> Option<u64>| -> Vec<f64> {
+            records
+                .iter()
+                .filter(|r| &r.benchmark == id)
+                .filter_map(|r| match (pick(r), r.rays) {
+                    (Some(count), Some(rays)) if rays > 0 => Some(count as f64 / rays as f64),
+                    _ => None,
+                })
+                .collect()
+        };
+        let nodes_per_ray = per_ray(|r| r.node_visits);
+        let prims_per_ray = per_ray(|r| r.prim_tests);
 
         println!(
-            "  {:<5} {:<15} {:>11} {:>5} {:>7.0} ms {:>5.1}% {:>3} {:>8.2} {:>8.2} {:>7.2} {:>6.2} {:>10}",
+            "  {:<5} {:<15} {:>11} {:>5} {:>7.0} ms {:>5.1}% {:>3} {:>8.2} {:>8.2} {:>7.2} {:>8.2} {:>8.2} {:>6.2} {:>10}",
             id,
             bench.manifest.name,
             format!("{}x{}", workload.width, bench.height(workload.width)),
@@ -283,6 +309,8 @@ fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
             stats(&mray).median,
             stats(&msmp).median,
             stats(&per_sample).median,
+            stats(&nodes_per_ray).median,
+            stats(&prims_per_ray).median,
             stats(&imbalance).median,
             records
                 .iter()

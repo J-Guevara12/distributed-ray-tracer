@@ -1,6 +1,6 @@
 use rt_core::{Interval, Ray, Vec3};
 
-use crate::{Aabb, HitRecord, Hittable, primitive::Primitive};
+use crate::{Aabb, HitRecord, Hittable, TraversalStats, primitive::Primitive};
 
 /// Máximo de primitivas por hoja. Con 1 el árbol tiene el doble de nodos y el
 /// recorrido paga más saltos de los que ahorra.
@@ -132,8 +132,17 @@ fn build_recursive(nodes: &mut Vec<FlatNode>, primitives: &mut [Primitive], firs
     index
 }
 
-impl Hittable for Bvh {
-    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
+impl Bvh {
+    /// `COUNT` es const genérico a propósito: la instancia `false` compila sin
+    /// rastro de los contadores, así que medir y no medir salen del **mismo
+    /// binario**. Comparar binarios distintos ya nos costó un diagnóstico malo.
+    #[inline]
+    fn traverse<const COUNT: bool>(
+        &self,
+        ray: &Ray,
+        ray_t: Interval,
+        stats: &mut TraversalStats,
+    ) -> Option<HitRecord> {
         if self.nodes.is_empty() {
             return None;
         }
@@ -145,12 +154,26 @@ impl Hittable for Bvh {
         let mut closest = ray_t.max;
         let mut best: Option<HitRecord> = None;
 
+        // Locales en vez de escribir a través de `&mut`: el compilador no puede
+        // descartar aliasing con `self` y los dejaría en memoria dentro del bucle.
+        let mut node_visits = 0u64;
+        let mut prim_tests = 0u64;
+
         loop {
             let node = &self.nodes[current as usize];
+
+            if COUNT {
+                node_visits += 1;
+            }
 
             if node.bounds.hit(ray, Interval::new(ray_t.min, closest)) {
                 if node.count > 0 {
                     let start = node.offset as usize;
+
+                    if COUNT {
+                        prim_tests += node.count as u64;
+                    }
+
                     for primitive in &self.primitives[start..start + node.count as usize] {
                         if let Some(rec) = primitive.hit(ray, Interval::new(ray_t.min, closest)) {
                             closest = rec.t;
@@ -182,7 +205,27 @@ impl Hittable for Bvh {
             current = stack[depth];
         }
 
+        if COUNT {
+            stats.node_visits += node_visits;
+            stats.prim_tests += prim_tests;
+        }
+
         best
+    }
+}
+
+impl Hittable for Bvh {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
+        self.traverse::<false>(ray, ray_t, &mut TraversalStats::default())
+    }
+
+    fn hit_counted(
+        &self,
+        ray: &Ray,
+        ray_t: Interval,
+        stats: &mut TraversalStats,
+    ) -> Option<HitRecord> {
+        self.traverse::<true>(ray, ray_t, stats)
     }
 
     fn bounding_box(&self) -> Aabb {

@@ -29,7 +29,10 @@ impl RayTracer for NormalTracer {
         let interval = Interval::new(0.0, f32::INFINITY);
 
         context.stats.rays += 1;
-        if let Some(rec) = scene.world.hit(&ray, interval) {
+        if let Some(rec) = scene
+            .world
+            .hit_counted(&ray, interval, &mut context.stats.traversal)
+        {
             // Las mapeamos linealmente a [0.0, 1.0] para convertirlas en color.
             let r = 0.5 * (rec.normal.x + 1.0);
             let g = 0.5 * (rec.normal.y + 1.0);
@@ -68,7 +71,11 @@ impl RayTracer for PathTracer {
             let interval = Interval::new(0.001, f32::INFINITY);
 
             context.stats.rays += 1;
-            if let Some(rec) = scene.world.hit(&current_ray, interval) {
+            if let Some(rec) =
+                scene
+                    .world
+                    .hit_counted(&current_ray, interval, &mut context.stats.traversal)
+            {
                 let material = scene.materials[rec.material as usize];
                 let emitted = material.emitted(rec.normal[0], rec.normal[0], rec.p);
                 accumulated_light += attenuation * emitted;

@@ -158,12 +158,12 @@ Los números son **identidad**, no orden. El orden de ejecución está en §6.
 | F0.2 ✅ | Framebuffer `Vec<Vec4>` lineal; tone mapping como etapa de lectura; export EXR |
 | F0.3a ✅ | `rt-bench`: manifiesto, wall time, metadata, salida JSONL |
 | F0.3b ✅ | `RayStats` por `&mut`, rayos/s, samples/s, resumen de tiles |
-| F0.3c | `--reference` (render a ~100k spp → EXR), MSE en espacio lineal. **No antes de F1** |
-| F0.4 | Determinismo: RNG sembrado por (píxel, sample, rebote); misma imagen con 1 hilo y con 24; test de regresión con hash |
-| F0.5 | `thiserror` en librerías, `anyhow` en binarios; eliminar `unwrap`/`expect` de rutas no-inicialización |
-| F0.6 | `Material` y `Hittable` de `dyn` a enums. Justificación medible, no estética |
-| F0.7 | **BVH**: split por eje de mayor extensión (elimina `fastrand`), quitar el duplicado de `span==1`, orden de recorrido front-to-back |
-| F0.8 | `Aabb{min,max: Vec3A}`, `inv_dir` precomputado en `Ray`, slab test SIMD, `Ray` por referencia. **+ BVH plano** (`Vec<FlatNode>` con índices `u32`, hojas multi-primitiva, primitivas contiguas) |
+| F0.3c ✅ | `--reference` (render a ~100k spp → EXR), MSE en espacio lineal. **No antes de F1** |
+| F0.4 ✅ | Determinismo: RNG sembrado por (píxel, sample, rebote); misma imagen con 1 hilo y con 24; test de regresión con hash |
+| F0.5 ✅ | `thiserror` en librerías, `anyhow` en binarios; eliminar `unwrap`/`expect` de rutas no-inicialización |
+| F0.6 ✅ | `Material` y `Hittable` de `dyn` a enums. Justificación medible, no estética |
+| F0.7 ✅ | **BVH**: split por eje de mayor extensión (elimina `fastrand`), quitar el duplicado de `span==1`, orden de recorrido front-to-back |
+| F0.8 ✅ | `Aabb{min,max: Vec3A}`, `inv_dir` precomputado en `Ray`, slab test SIMD, `Ray` por referencia. **+ BVH plano** (`Vec<FlatNode>` con índices `u32`, hojas multi-primitiva, primitivas contiguas) |
 | F0.9 | Ruleta rusa + corte por atenuación; `tile_size` 32; RNG por tile (sin TLS); `random_unit_vector` analítico; fix de `emitted(normal[0], normal[0], …)` |
 | F0.10 | Preview rápido: baja resolución con `NormalTracer` a 1 spp |
 | F0.11 | White furnace test: esfera lambertiana albedo 1.0 en ambiente uniforme debe desaparecer. Automatizado |

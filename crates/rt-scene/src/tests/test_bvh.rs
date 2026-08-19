@@ -189,3 +189,68 @@ fn test_bvh_leaves_hold_multiple_primitives() {
         );
     }
 }
+
+/// El invariante que de verdad importa: el BVH es una optimización, así que
+/// tiene que devolver exactamente lo mismo que revisar todas las primitivas.
+///
+/// Con geometría no degenerada la igualdad es exacta, bit a bit. Donde deja de
+/// serlo es sobre superficies coincidentes (dos quads compartiendo arista, por
+/// ejemplo), y ahí no hay respuesta correcta: los dos están a la misma
+/// distancia y gana el que se pruebe último. Por eso la escena de este test son
+/// esferas sueltas — ver la nota de LEARNED_LESSONS sobre las aristas de B1.
+#[test]
+fn test_bvh_matches_linear_scan() {
+    use crate::linear_scan::LinearScan;
+
+    let mut rng = fastrand::Rng::with_seed(0xB0A7);
+    let mut coord = |scale: f32| (rng.f32() - 0.5) * scale;
+
+    // Genero los parámetros una vez y construyo las dos estructuras a partir de
+    // ellos: `PlanarShape` no es `Clone`, y de todas formas el test necesita que
+    // las dos vean exactamente la misma geometría.
+    let specs: Vec<(Point3, f32, u32)> = (0..120)
+        .map(|i| {
+            let center = Point3::new(coord(40.0), coord(40.0), coord(40.0));
+            (center, 0.5 + coord(1.5).abs(), (i % 4) as u32)
+        })
+        .collect();
+
+    let primitives = |specs: &[(Point3, f32, u32)]| -> Vec<Primitive> {
+        specs.iter().map(|(c, r, m)| Sphere::new(*c, *r, *m).into()).collect()
+    };
+
+    let bvh = Bvh::build(primitives(&specs));
+    let linear = LinearScan::new(primitives(&specs));
+
+    let range = Interval::new(0.001, f32::INFINITY);
+    let mut checked = 0;
+
+    for _ in 0..20_000 {
+        let origin = Point3::new(coord(80.0), coord(80.0), coord(80.0));
+        let direction = Vec3::new(coord(2.0), coord(2.0), coord(2.0));
+        if direction.length_squared() < 1e-6 {
+            continue;
+        }
+
+        let ray = Ray::new(origin, direction);
+        let from_bvh = bvh.hit(&ray, range);
+        let from_linear = linear.hit(&ray, range);
+
+        match (&from_bvh, &from_linear) {
+            (None, None) => {}
+            (Some(a), Some(b)) => {
+                assert_eq!(a.t, b.t, "distinta distancia para el mismo rayo");
+                assert_eq!(a.material, b.material, "distinta primitiva a la misma t");
+                assert_eq!(a.normal, b.normal, "distinta normal");
+            }
+            _ => panic!(
+                "solo una de las dos estructuras reportó impacto: bvh={:?} lineal={:?}",
+                from_bvh.map(|r| r.t),
+                from_linear.map(|r| r.t)
+            ),
+        }
+        checked += 1;
+    }
+
+    assert!(checked > 15_000, "el test degeneró: solo {checked} rayos válidos");
+}

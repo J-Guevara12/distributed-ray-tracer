@@ -2,6 +2,7 @@ use image::ImageError;
 use std::{ fs::File, io::BufWriter, path::Path, sync::{ Arc } };
 use parking_lot::RwLock;
 
+use crate::exr_io;
 use crate::tiles::TileResult;
 use rt_core::{Vec4, display::{DisplayParams, resolve, to_srgb8}};
 
@@ -44,6 +45,13 @@ impl FrameBuffer {
         let data = self.data.read();
 
         data.to_vec()
+    }
+
+    /// Guarda la radiancia lineal tal cual, sin tone mapping ni cuantización.
+    /// Es lo que se usa como referencia para medir error; `save_png` es para ver.
+    pub fn save_exr<P: AsRef<Path>>(&self, path: P) -> exr_io::Result<()> {
+        let data = self.data.read();
+        exr_io::write(path, &resolve(&data), self.width, self.height)
     }
 
     pub fn save_png<P: AsRef<Path>>(&self, path: P, params: &DisplayParams) -> Result<(), ImageError> {

@@ -77,7 +77,8 @@ impl RayTracer for PathTracer {
                     .hit_counted(&current_ray, interval, &mut context.stats.traversal)
             {
                 let material = scene.materials[rec.material as usize];
-                let emitted = material.emitted(rec.normal[0], rec.normal[0], rec.p);
+                // (u, v) are texture coordinates; HitRecord won't have them until F2.7
+                let emitted = material.emitted(0.0, 0.0, rec.p);
                 accumulated_light += attenuation * emitted;
 
                 if let Some((attenuation_material, scattered_ray)) =

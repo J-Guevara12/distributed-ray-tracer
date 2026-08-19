@@ -1,35 +1,60 @@
-use std::sync::Arc;
+use rt_core::{Interval, Ray, Vec3};
 
-use rt_core::{Interval, Vec3};
+use crate::{Aabb, HitRecord, Hittable, primitive::Primitive};
 
-use crate::{Hittable, aabb::Aabb, hittable_list::HittableList};
+/// Máximo de primitivas por hoja. Con 1 el árbol tiene el doble de nodos y el
+/// recorrido paga más saltos de los que ahorra.
+const MAX_LEAF_PRIMITIVES: usize = 4;
 
-pub struct BvhNode {
-    left: Arc<dyn Hittable>,
-    right: Arc<dyn Hittable>,
-    bbox: Aabb,
-    axis: usize,
+/// Profundidad máxima de la pila de recorrido. Un árbol balanceado de 10M de
+/// primitivas con hojas de 4 llega a ~21 niveles.
+const MAX_STACK: usize = 64;
+
+/// Nodo del BVH en representación plana.
+///
+/// El hijo izquierdo es siempre `índice + 1`: al construir en orden
+/// depth-first queda pegado al padre en memoria, así que no hay que guardar su
+/// índice y suele estar ya en caché. `offset` apunta al hijo derecho en los
+/// nodos internos y al primer primitivo en las hojas.
+#[derive(Clone, Copy)]
+struct FlatNode {
+    bounds: Aabb,
+    offset: u32,
+    /// 0 = nodo interno. >0 = hoja con esa cantidad de primitivas.
+    count: u16,
+    axis: u8,
 }
 
-fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> usize {
+pub struct Bvh {
+    nodes: Vec<FlatNode>,
+    primitives: Vec<Primitive>,
+    bounds: Aabb,
+}
+
+fn union(primitives: &[Primitive]) -> Aabb {
+    let mut out = primitives[0].bounding_box();
+    for primitive in &primitives[1..] {
+        out = Aabb::surrounding_box(out, primitive.bounding_box());
+    }
+    out
+}
+
+fn longest_axis(primitives: &[Primitive]) -> usize {
     let mut low = Vec3::splat(f32::INFINITY);
     let mut high = Vec3::splat(f32::NEG_INFINITY);
 
-    for object in objects {
-        let aabb = object.bounding_box();
-
-        let c = Vec3::new(
-            0.5 * (aabb.x.min + aabb.x.max),
-            0.5 * (aabb.y.min + aabb.y.max),
-            0.5 * (aabb.z.min + aabb.z.max)
+    for primitive in primitives {
+        let b = primitive.bounding_box();
+        let centroid = Vec3::new(
+            0.5 * (b.x.min + b.x.max),
+            0.5 * (b.y.min + b.y.max),
+            0.5 * (b.z.min + b.z.max),
         );
-
-        low = low.min(c);
-        high = high.max(c);
+        low = low.min(centroid);
+        high = high.max(centroid);
     }
-    let extent = high - low;
-    
 
+    let extent = high - low;
     if extent.x >= extent.y && extent.x >= extent.z {
         0
     } else if extent.y >= extent.z {
@@ -39,63 +64,132 @@ fn longest_axis(objects: &Vec<Arc<dyn Hittable>>) -> usize {
     }
 }
 
-// Ordena por el mínimo de la caja, no por el centroide. Sobre un eje que casi
-// no separa objetos, el centroide produce un orden espacialmente arbitrario
-// (en B2, ordenar por centroide en Y equivale a ordenar por radio, y cuesta un
-// 33%). El mínimo empata en ese caso y el sort estable conserva el orden de
-// entrada, que suele venir agrupado espacialmente.
-fn sort_key(object: &Arc<dyn Hittable>, axis: usize) -> f32 {
-    let b = object.bounding_box();
-    match axis {
-        0 => b.x.min,
-        1 => b.y.min,
-        _ => b.z.min,
+impl Bvh {
+    pub fn build(mut primitives: Vec<Primitive>) -> Self {
+        if primitives.is_empty() {
+            return Self {
+                nodes: Vec::new(),
+                primitives,
+                bounds: Aabb::default(),
+            };
+        }
+
+        let mut nodes = Vec::with_capacity(2 * primitives.len() / MAX_LEAF_PRIMITIVES + 1);
+        build_recursive(&mut nodes, &mut primitives, 0);
+        let bounds = nodes[0].bounds;
+
+        Self {
+            nodes,
+            primitives,
+            bounds,
+        }
+    }
+
+    pub fn primitive_count(&self) -> usize {
+        self.primitives.len()
+    }
+
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
     }
 }
 
-impl BvhNode {
-    pub fn build(mut objects: Vec<Arc<dyn Hittable>>) -> Arc<dyn Hittable> {
-        match objects.len() {
-            0 => Arc::new(HittableList::new()),
-            1 => objects.pop().unwrap(),
-            _ => {
-                let axis = longest_axis(&objects);
-                objects.sort_by(|a, b| sort_key(a, axis).total_cmp(&sort_key(b, axis)));
+/// Emite los nodos en orden depth-first y devuelve el índice del que acaba de
+/// escribir. `first` es el desplazamiento de este trozo dentro del array
+/// completo de primitivas, que es lo que las hojas guardan en `offset`.
+fn build_recursive(nodes: &mut Vec<FlatNode>, primitives: &mut [Primitive], first: usize) -> usize {
+    let index = nodes.len();
+    let bounds = union(primitives);
 
-                let right_objects = objects.split_off(objects.len()/2);
+    nodes.push(FlatNode {
+        bounds,
+        offset: 0,
+        count: 0,
+        axis: 0,
+    });
 
-                let left = Self::build(objects);
-                let right = Self::build(right_objects);
-
-                let bbox = Aabb::surrounding_box(left.bounding_box(), right.bounding_box());
-
-                Arc::new(Self { left, right, bbox, axis })
-            }
-        }
-
-    }
-}
-
-impl Hittable for BvhNode {
-    fn hit(&self, ray: &rt_core::Ray, ray_t: rt_core::Interval) -> Option<crate::HitRecord> {
-        if !(self.bbox.hit(*ray, ray_t)){
-            return None
-        }
-
-        let (near, far) = match ray.direction[self.axis] < 0.0 {
-            true => (&self.right, &self.left),
-            false => (&self.left, &self.right),
+    if primitives.len() <= MAX_LEAF_PRIMITIVES {
+        nodes[index] = FlatNode {
+            bounds,
+            offset: first as u32,
+            count: primitives.len() as u16,
+            axis: 0,
         };
+        return index;
+    }
 
-        let hit_near = near.hit(ray, ray_t);
-        let max = hit_near.as_ref().map_or(ray_t.max, |rec| rec.t);
+    let axis = longest_axis(primitives);
+    primitives.sort_by(|a, b| a.sort_key(axis).total_cmp(&b.sort_key(axis)));
 
-        let hit_far = far.hit(ray, Interval::new(ray_t.min, max));
+    let mid = primitives.len() / 2;
+    let (left, right) = primitives.split_at_mut(mid);
 
-        hit_far.or(hit_near)
+    build_recursive(nodes, left, first);
+    let right_index = build_recursive(nodes, right, first + mid);
+
+    nodes[index] = FlatNode {
+        bounds,
+        offset: right_index as u32,
+        count: 0,
+        axis: axis as u8,
+    };
+    index
+}
+
+impl Hittable for Bvh {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
+        if self.nodes.is_empty() {
+            return None;
+        }
+
+        let mut stack = [0u32; MAX_STACK];
+        let mut depth = 0usize;
+        let mut current = 0u32;
+
+        let mut closest = ray_t.max;
+        let mut best: Option<HitRecord> = None;
+
+        loop {
+            let node = &self.nodes[current as usize];
+
+            if node.bounds.hit(ray, Interval::new(ray_t.min, closest)) {
+                if node.count > 0 {
+                    let start = node.offset as usize;
+                    for primitive in &self.primitives[start..start + node.count as usize] {
+                        if let Some(rec) = primitive.hit(ray, Interval::new(ray_t.min, closest)) {
+                            closest = rec.t;
+                            best = Some(rec);
+                        }
+                    }
+                } else {
+                    // Front-to-back: visitar primero el lado hacia el que
+                    // apunta el rayo hace que `closest` se recorte antes y el
+                    // otro hijo falle su AABB más seguido.
+                    let (near, far) = if ray.direction[node.axis as usize] < 0.0 {
+                        (node.offset, current + 1)
+                    } else {
+                        (current + 1, node.offset)
+                    };
+
+                    debug_assert!(depth < MAX_STACK, "pila de recorrido desbordada");
+                    stack[depth] = far;
+                    depth += 1;
+                    current = near;
+                    continue;
+                }
+            }
+
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+            current = stack[depth];
+        }
+
+        best
     }
 
     fn bounding_box(&self) -> Aabb {
-        self.bbox
+        self.bounds
     }
 }

@@ -1,7 +1,7 @@
 
 use axum::{Json, extract::State, http::StatusCode};
 use rt_core::dto::ScenePayload;
-use rt_scene::{Scene, bvh::BvhNode, hittable_list::SceneData};
+use rt_scene::{Scene, bvh::Bvh, hittable_list::SceneData};
 use std::sync::Arc;
 
 use crate::state::AppState;
@@ -25,7 +25,7 @@ pub async fn post_scene_handler(
 
     let data = SceneData::from(&payload);
     let world = Arc::new(Scene {
-        world: BvhNode::build(data.objects),
+        world: Arc::new(Bvh::build(data.objects)),
         materials: data.materials,
         background: payload.background.clone(),
     });

@@ -4,10 +4,7 @@ use crate::{HitRecord, Material};
 
 // Función auxiliar para generar un HitRecord dummy necesario para la firma de scatter
 fn setup_dummy_hit_record() -> HitRecord {
-    let ray = Ray {
-        origin: Point3::new(0.0, 0.0, 0.0),
-        direction: Vec3::new(0.0, 0.0, -1.0),
-    };
+    let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
 
     HitRecord::new(
         &ray,
@@ -24,10 +21,7 @@ fn test_scatter_returns_none() {
     let light_color = Color::new(5.0, 5.0, 5.0);
     let light_material = Material::DiffuseLight { emit: light_color };
 
-    let ray_in = Ray {
-        origin: Point3::new(0.0, 0.0, 0.0),
-        direction: Vec3::new(0.0, 0.0, -1.0),
-    };
+    let ray_in = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
     let rec = setup_dummy_hit_record();
 
     let scatter_result = light_material.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0));

@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use rt_core::background::Background;
 use rt_core::{Color, Point3, Vec3, Vec4};
-use rt_scene::bvh::BvhNode;
+use rt_scene::bvh::Bvh;
 use rt_scene::geometry::Sphere;
-use rt_scene::hittable_list::HittableList;
+use rt_scene::primitive::Primitive;
 use rt_scene::{Material, Scene};
 
 use crate::camera::{Camera, CameraConfig};
@@ -17,30 +17,15 @@ use crate::tracers::PathTracer;
 /// jitter de píxel, disco de desenfoque, `random_unit_vector` (lambertiano y
 /// fuzz de metal) y el volado de Schlick del dieléctrico.
 fn scene() -> Scene {
-    let mut list = HittableList::new();
-    list.add(Arc::new(Sphere::new(
-        Point3::new(0.0, -100.5, -1.0),
-        100.0,
-        0,
-    )));
-    list.add(Arc::new(Sphere::new(
-        Point3::new(0.0, 0.0, -1.2),
-        0.5,
-        1,
-    )));
-    list.add(Arc::new(Sphere::new(
-        Point3::new(-1.0, 0.0, -1.0),
-        0.5,
-        2,
-    )));
-    list.add(Arc::new(Sphere::new(
-        Point3::new(1.0, 0.0, -1.0),
-        0.5,
-        3,
-    )));
+    let primitives: Vec<Primitive> = vec![
+        Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0, 0).into(),
+        Sphere::new(Point3::new(0.0, 0.0, -1.2), 0.5, 1).into(),
+        Sphere::new(Point3::new(-1.0, 0.0, -1.0), 0.5, 2).into(),
+        Sphere::new(Point3::new(1.0, 0.0, -1.0), 0.5, 3).into(),
+    ];
 
     Scene {
-        world: BvhNode::build(list.objects),
+        world: Arc::new(Bvh::build(primitives)),
         materials: vec![
             Material::Lambertian { albedo: Color::new(0.8, 0.8, 0.0) },
             Material::Lambertian { albedo: Color::new(0.1, 0.2, 0.5) },

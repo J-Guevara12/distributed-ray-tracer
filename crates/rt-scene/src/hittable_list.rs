@@ -1,6 +1,7 @@
 use rt_core::dto::{MaterialDTO, ObjectDTO, ScenePayload};
 
 use crate::{
+    primitive::Primitive,
     geometry::{PlanarShape, Sphere},
     *,
 };
@@ -55,13 +56,13 @@ impl Hittable for HittableList {
 
 /// Geometría más el array de materiales que sus primitivas indexan.
 pub struct SceneData {
-    pub objects: Vec<Arc<dyn Hittable>>,
+    pub objects: Vec<Primitive>,
     pub materials: Vec<Material>,
 }
 
 impl From<&ScenePayload> for SceneData {
     fn from(value: &ScenePayload) -> Self {
-        let mut mundo = HittableList::new();
+        let mut mundo: Vec<Primitive> = Vec::with_capacity(value.objects.len());
         let mut palette = Vec::with_capacity(value.materials.len());
         let mut materials = HashMap::new();
 
@@ -90,7 +91,7 @@ impl From<&ScenePayload> for SceneData {
                     if let Some(mat) = materials.get(material) {
                         let sphere = Sphere::new(*center, *radius, *mat);
 
-                        mundo.add(Arc::new(sphere));
+                        mundo.push(sphere.into());
                     } else {
                         eprintln!(
                             "Warning: El material '{}' no fue encontrado para la esfera.",
@@ -108,7 +109,7 @@ impl From<&ScenePayload> for SceneData {
                             *mat,
                         );
 
-                        mundo.add(Arc::new(quad));
+                        mundo.push(quad.into());
                     }
                 }
                 ObjectDTO::Triangle { q, u, v, material } => {
@@ -121,7 +122,7 @@ impl From<&ScenePayload> for SceneData {
                             *mat,
                         );
 
-                        mundo.add(Arc::new(triangle));
+                        mundo.push(triangle.into());
                     }
                 }
                 ObjectDTO::Elipse { q, u, v, material } => {
@@ -134,12 +135,12 @@ impl From<&ScenePayload> for SceneData {
                             *mat,
                         );
 
-                        mundo.add(Arc::new(elipse));
+                        mundo.push(elipse.into());
                     }
                 }
             }
         }
 
-        Self { objects: mundo.objects, materials: palette }
+        Self { objects: mundo, materials: palette }
     }
 }

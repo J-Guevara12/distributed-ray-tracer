@@ -8,7 +8,7 @@ pub struct Aabb {
 }
 
 impl Aabb {
-    pub fn hit(&self, ray: Ray, mut ray_t: Interval) -> bool {
+    pub fn hit(&self, ray: &Ray, mut ray_t: Interval) -> bool {
         for axis in 0..3 {
             let ax_interval = match axis {
                 0 => self.x,
@@ -16,7 +16,7 @@ impl Aabb {
                 _ => self.z,
             };
 
-            let inv_d = 1.0/ray.direction[axis];
+            let inv_d = ray.inv_dir[axis];
             let origin = ray.origin[axis];
 
             let mut t0 = (ax_interval.min - origin) * inv_d;

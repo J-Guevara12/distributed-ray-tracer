@@ -4,7 +4,7 @@ use rt_core::{display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{
     camera::{Camera, CameraConfig}, framebuffer::FrameBuffer, render::render_scene, tiles::TileResult, tracers::PathTracer,
 };
-use rt_scene::{Scene, bvh::BvhNode, hittable_list::SceneData};
+use rt_scene::{Scene, bvh::Bvh, hittable_list::SceneData};
 
 pub fn main() {
     println!("Inicializando render local");
@@ -19,7 +19,7 @@ pub fn main() {
 
     let data = SceneData::from(&scene_payload);
     let scene = Scene {
-        world: BvhNode::build(data.objects),
+        world: Arc::new(Bvh::build(data.objects)),
         materials: data.materials,
         background: scene_payload.background.clone(),
     };

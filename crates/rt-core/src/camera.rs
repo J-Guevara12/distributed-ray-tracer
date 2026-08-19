@@ -111,9 +111,7 @@ impl Camera {
                 + (lens_sample.y * self.defocus_disk_v)
         };
 
-        let direction = (destination - origin).normalize();
-
-        Ray { origin, direction }
+        Ray::new(origin, destination - origin)
     }
 
     fn sample_square(&self, rng: &mut Rng) -> Vec3 {

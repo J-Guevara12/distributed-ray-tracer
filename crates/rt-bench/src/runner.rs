@@ -8,7 +8,7 @@ use rt_renderer::framebuffer::FrameBuffer;
 use rt_renderer::render::render_scene;
 use rt_renderer::tiles::TileResult;
 use rt_renderer::tracers::PathTracer;
-use rt_scene::bvh::BvhNode;
+use rt_scene::bvh::Bvh;
 use rt_scene::hittable_list::SceneData;
 use rt_scene::Scene;
 
@@ -61,7 +61,7 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
     let build_start = Instant::now();
     let data = SceneData::from(&bench.scene);
     let scene = Scene {
-        world: BvhNode::build(data.objects),
+        world: Arc::new(Bvh::build(data.objects)),
         materials: data.materials,
         background: bench.scene.background.clone(),
     };

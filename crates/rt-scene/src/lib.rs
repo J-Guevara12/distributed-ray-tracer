@@ -9,6 +9,7 @@ pub mod hittable_list;
 pub mod materials;
 pub mod aabb;
 pub mod bvh;
+pub mod primitive;
 mod utils;
 
 #[derive(Debug, Clone, Copy)]

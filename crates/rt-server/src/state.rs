@@ -1,6 +1,6 @@
 use rt_core::{Job, display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{camera::Camera, framebuffer::FrameBuffer};
-use rt_scene::{Scene, bvh::BvhNode, hittable_list::SceneData};
+use rt_scene::{Scene, bvh::Bvh, hittable_list::SceneData};
 use std::sync::{ Arc, atomic::{AtomicBool, AtomicUsize}};
 use parking_lot::RwLock;
 use tokio::sync::{broadcast, mpsc};
@@ -31,7 +31,7 @@ impl AppState {
 
         let data = SceneData::from(&scene_data);
         let scene = Scene {
-            world: BvhNode::build(data.objects),
+            world: Arc::new(Bvh::build(data.objects)),
             materials: data.materials,
             background: scene_data.background.clone(),
         };

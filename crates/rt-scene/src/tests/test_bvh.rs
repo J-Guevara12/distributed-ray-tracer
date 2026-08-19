@@ -1,76 +1,35 @@
-use std::sync::Arc;
-use rt_core::{Point3, Vec3, Ray, Color};
-use crate::{HitRecord, Hittable, Interval, Material, aabb::Aabb, bvh::BvhNode};
+use rt_core::{Point3, Ray, Vec3};
 
-// =========================================================================
-// 1. COMPONENTES MOCK PARA AISLAR LAS PRUEBAS
-// =========================================================================
+use crate::{Hittable, Interval, aabb::Aabb, bvh::Bvh, geometry::Sphere, primitive::Primitive};
 
-
-// Un objeto ficticio con una posición y caja conocida para probar el árbol
-struct MockHittable {
-    bbox: Aabb,
-    hit_point: Option<Point3>,
-}
-
-impl MockHittable {
-    fn new(bbox: Aabb, hit_point: Option<Point3>) -> Self {
-        Self { bbox, hit_point }
-    }
-}
-
-impl Hittable for MockHittable {
-    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
-        // Si el objeto está configurado para registrar un impacto, evaluamos si el rayo toca su caja
-        if let Some(p) = self.hit_point && self.bbox.hit(*ray, ray_t) {
-            // El `t` tiene que corresponder al punto de impacto: el BVH
-            // recorta el intervalo del hijo derecho con él, así que un `t`
-            // fijo haría que el árbol descartara impactos válidos según
-            // qué eje de corte le tocara al azar.
-            let t = (p - ray.origin).dot(ray.direction);
-            return Some(HitRecord::new(
-                ray,
-                t,
-                Vec3::new(0.0, 0.0, 1.0),
-                p,
-                0,
-            ));
-        }
-        None
-    }
-
-    fn bounding_box(&self) -> Aabb {
-        self.bbox
-    }
+fn sphere(x: f32, y: f32, z: f32, radius: f32) -> Primitive {
+    Sphere::new(Point3::new(x, y, z), radius, 0).into()
 }
 
 // =========================================================================
-// 2. PRUEBAS UNITARIAS PARA EL AABB (Volumen Envolvente)
+// AABB
 // =========================================================================
 
 #[test]
 fn test_aabb_ray_intersection_hit() {
-    // Caja de 2x2x2 centrada en el origen
     let bbox = Aabb {
         x: Interval::new(-1.0, 1.0),
         y: Interval::new(-1.0, 1.0),
         z: Interval::new(-1.0, 1.0),
     };
-
-    // Un rayo que apunta directamente al centro desde el frente (Eje -Z)
-    let ray_front = Ray {
-        origin: Point3::new(0.0, 0.0, 5.0),
-        direction: Vec3::new(0.0, 0.0, -1.0),
-    };
     let t_range = Interval::new(0.001, f32::INFINITY);
-    assert!(bbox.hit(ray_front, t_range), "El rayo frontal debió impactar el centro de la caja");
 
-    // Un rayo diagonal que raspa una esquina por dentro
-    let ray_diagonal = Ray {
-        origin: Point3::new(-2.0, -2.0, -2.0),
-        direction: Vec3::new(1.0, 1.0, 1.0),
-    };
-    assert!(bbox.hit(ray_diagonal, t_range), "El rayo diagonal debió cruzar la caja de esquina a esquina");
+    let ray_front = Ray::new(Point3::new(0.0, 0.0, 5.0), Vec3::new(0.0, 0.0, -1.0));
+    assert!(
+        bbox.hit(&ray_front, t_range),
+        "El rayo frontal debió impactar el centro de la caja"
+    );
+
+    let ray_diagonal = Ray::new(Point3::new(-2.0, -2.0, -2.0), Vec3::new(1.0, 1.0, 1.0));
+    assert!(
+        bbox.hit(&ray_diagonal, t_range),
+        "El rayo diagonal debió cruzar la caja de esquina a esquina"
+    );
 }
 
 #[test]
@@ -80,21 +39,19 @@ fn test_aabb_ray_intersection_miss() {
         y: Interval::new(-1.0, 1.0),
         z: Interval::new(-1.0, 1.0),
     };
-
-    // Rayo completamente paralelo a la caja pero desplazado en X
-    let ray_miss_parallel = Ray {
-        origin: Point3::new(2.5, 0.0, 5.0),
-        direction: Vec3::new(0.0, 0.0, -1.0),
-    };
     let t_range = Interval::new(0.001, f32::INFINITY);
-    assert!(!bbox.hit(ray_miss_parallel, t_range), "Un rayo paralelo por fuera no debe impactar la caja");
 
-    // Rayo que apunta en dirección opuesta a la ubicación de la caja
-    let ray_wrong_direction = Ray {
-        origin: Point3::new(0.0, 0.0, 5.0),
-        direction: Vec3::new(0.0, 0.0, 1.0), // Se aleja en +Z
-    };
-    assert!(!bbox.hit(ray_wrong_direction, t_range), "Un rayo que se aleja de la caja no debe registrar impacto");
+    let paralelo = Ray::new(Point3::new(2.5, 0.0, 5.0), Vec3::new(0.0, 0.0, -1.0));
+    assert!(
+        !bbox.hit(&paralelo, t_range),
+        "Un rayo paralelo por fuera no debe impactar la caja"
+    );
+
+    let alejandose = Ray::new(Point3::new(0.0, 0.0, 5.0), Vec3::new(0.0, 0.0, 1.0));
+    assert!(
+        !bbox.hit(&alejandose, t_range),
+        "Un rayo que se aleja de la caja no debe registrar impacto"
+    );
 }
 
 #[test]
@@ -104,38 +61,30 @@ fn test_aabb_interval_constraints() {
         y: Interval::new(1.0, 3.0),
         z: Interval::new(1.0, 3.0),
     };
+    let ray = Ray::new(Point3::new(2.0, 2.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
 
-    let ray = Ray {
-        origin: Point3::new(2.0, 2.0, 0.0),
-        direction: Vec3::new(0.0, 0.0, 1.0),
-    };
-
-    // El rayo físicamente impactaría la caja en t = 1.0 (Z=1.0)
-    // Forzamos un intervalo de tiempo restringido que termine antes de llegar [0.0, 0.5]
-    let strict_range = Interval::new(0.0, 0.5);
-    assert!(!bbox.hit(ray, strict_range), "La caja no debe registrar impacto si ocurre fuera del rango de tiempo t permitido");
+    // El impacto físico ocurre en t = 1.0; el intervalo termina antes
+    assert!(
+        !bbox.hit(&ray, Interval::new(0.0, 0.5)),
+        "La caja no debe impactar si ocurre fuera del rango de t permitido"
+    );
 }
 
 #[test]
 fn test_aabb_surrounding_box() {
-    // Caja A en el cuadrante negativo
     let box_a = Aabb {
         x: Interval::new(-5.0, -2.0),
         y: Interval::new(-5.0, -2.0),
         z: Interval::new(-5.0, -2.0),
     };
-
-    // Caja B en el cuadrante positivo
     let box_b = Aabb {
         x: Interval::new(1.0, 4.0),
         y: Interval::new(1.0, 4.0),
         z: Interval::new(1.0, 4.0),
     };
 
-    // Generamos la caja contenedora de ambas
     let big_box = Aabb::surrounding_box(box_a, box_b);
 
-    // Los límites de la caja grande deben expandirse para cubrir los extremos de ambas
     assert_eq!(big_box.x.min, -5.0);
     assert_eq!(big_box.x.max, 4.0);
     assert_eq!(big_box.y.min, -5.0);
@@ -145,98 +94,97 @@ fn test_aabb_surrounding_box() {
 }
 
 // =========================================================================
-// 3. PRUEBAS UNITARIAS PARA EL BVH_NODE (Estructura y Recorrido)
+// BVH plano
 // =========================================================================
 
 #[test]
-fn test_bvh_construction_single_object() {
-    let obj_box = Aabb {
-        x: Interval::new(-1.0, 1.0),
-        y: Interval::new(-1.0, 1.0),
-        z: Interval::new(-1.0, 1.0),
-    };
-    let obj = Arc::new(MockHittable::new(obj_box, None));
-    let objects: Vec<Arc<dyn Hittable>> = vec![obj];
+fn test_bvh_empty_never_hits() {
+    let bvh = Bvh::build(vec![]);
+    let ray = Ray::new(Point3::ZERO, Vec3::new(0.0, 0.0, -1.0));
 
-    // Construir el nodo raíz con un único objeto
-    let bvh_root = BvhNode::build(objects);
-
-    // El algoritmo de Peter Shirley duplica la referencia en left y right cuando hay 1 solo objeto
-    assert_eq!(bvh_root.bounding_box().x.min, -1.0);
-    assert_eq!(bvh_root.bounding_box().x.max, 1.0);
+    assert!(bvh.hit(&ray, Interval::new(0.001, f32::INFINITY)).is_none());
+    assert_eq!(bvh.node_count(), 0);
 }
 
 #[test]
-fn test_bvh_construction_multiple_objects_sorting() {
-    // Creamos tres objetos separados a lo largo del eje X para forzar la división espacial
-    let box_left = Aabb { x: Interval::new(-10.0, -8.0), y: Interval::new(-1.0, 1.0), z: Interval::new(-1.0, 1.0) };
-    let box_center = Aabb { x: Interval::new(-1.0, 1.0), y: Interval::new(-1.0, 1.0), z: Interval::new(-1.0, 1.0) };
-    let box_right = Aabb { x: Interval::new(8.0, 10.0), y: Interval::new(-1.0, 1.0), z: Interval::new(-1.0, 1.0) };
+fn test_bvh_single_object_bounds() {
+    let bvh = Bvh::build(vec![sphere(0.0, 0.0, 0.0, 1.0)]);
 
-    let obj_l = Arc::new(MockHittable::new(box_left, None));
-    let obj_c = Arc::new(MockHittable::new(box_center, None));
-    let obj_r = Arc::new(MockHittable::new(box_right, None));
-
-    let objects: Vec<Arc<dyn Hittable>> = vec![obj_l, obj_c, obj_r];
-    let bvh_root = BvhNode::build(objects);
-
-    // La caja contenedora de la raíz debe englobar absolutamente todo el espacio de los extremos
-    let root_box = bvh_root.bounding_box();
-    assert_eq!(root_box.x.min, -10.0);
-    assert_eq!(root_box.x.max, 10.0);
+    assert_eq!(bvh.primitive_count(), 1);
+    assert_eq!(bvh.bounding_box().x.min, -1.0);
+    assert_eq!(bvh.bounding_box().x.max, 1.0);
 }
 
 #[test]
-fn test_bvh_traversal_hit_and_short_circuit() {
-    // Configuramos dos objetos en el eje Z
-    // Objeto Cercano (Z = -2.0)
-    let close_box = Aabb { x: Interval::new(-1.0, 1.0), y: Interval::new(-1.0, 1.0), z: Interval::new(-3.0, -1.0) };
-    // Objeto Lejano (Z = -10.0)
-    let far_box = Aabb { x: Interval::new(-1.0, 1.0), y: Interval::new(-1.0, 1.0), z: Interval::new(-11.0, -9.0) };
+fn test_bvh_root_bounds_cover_every_primitive() {
+    // Objetos separados a lo largo de X para forzar la división espacial
+    let bvh = Bvh::build(vec![
+        sphere(-9.0, 0.0, 0.0, 1.0),
+        sphere(0.0, 0.0, 0.0, 1.0),
+        sphere(9.0, 0.0, 0.0, 1.0),
+    ]);
 
-    let close_obj = Arc::new(MockHittable::new(close_box, Some(Point3::new(0.0, 0.0, -2.0))));
-    let far_obj = Arc::new(MockHittable::new(far_box, Some(Point3::new(0.0, 0.0, -10.0))));
-
-    // Los metemos en el árbol BVH
-    let objects: Vec<Arc<dyn Hittable>> = vec![close_obj, far_obj];
-    let bvh_root = BvhNode::build(objects);
-
-    // Lanzamos un rayo desde el origen hacia el fondo (-Z). Debería cruzar ambos objetos.
-    let ray = Ray {
-        origin: Point3::new(0.0, 0.0, 0.0),
-        direction: Vec3::new(0.0, 0.0, -1.0),
-    };
-
-    let hit_result = bvh_root.hit(&ray, Interval::new(0.001, f32::INFINITY));
-    
-    assert!(hit_result.is_some(), "El BVH debió reportar un impacto");
-    let record = hit_result.unwrap();
-    
-    // 🟢 PRUEBA CLAVE: El BVH debe retornar el impacto del objeto MÁS CERCANO (Z = -2.0)
-    // porque la lógica del nodo restringe dinámicamente el `current_max` al evaluar el segundo hijo.
-    assert_eq!(record.p.z, -2.0, "El árbol BVH devolvió un impacto erróneo ocultando el objeto más cercano");
+    let root = bvh.bounding_box();
+    assert_eq!(root.x.min, -10.0);
+    assert_eq!(root.x.max, 10.0);
 }
 
 #[test]
-fn test_bvh_node_miss_optimization() {
-    // Un objeto ubicado muy lejos a la derecha en el espacio
-    let isolated_box = Aabb {
-        x: Interval::new(100.0, 102.0),
-        y: Interval::new(100.0, 102.0),
-        z: Interval::new(100.0, 102.0),
-    };
-    let obj = Arc::new(MockHittable::new(isolated_box, Some(Point3::new(101.0, 101.0, 101.0))));
-    let bvh_root = BvhNode::build(vec![obj]);
+fn test_bvh_returns_closest_hit() {
+    // Cercano en Z = -2, lejano en Z = -10. El recorrido debe devolver el
+    // cercano sin importar en qué orden queden en el árbol.
+    let bvh = Bvh::build(vec![
+        sphere(0.0, 0.0, -10.0, 1.0),
+        sphere(0.0, 0.0, -2.0, 1.0),
+    ]);
 
-    // Lanzamos un rayo en la dirección opuesta (al vacío de la escena)
-    let ray_into_void = Ray {
-        origin: Point3::new(0.0, 0.0, 0.0),
-        direction: Vec3::new(0.0, 0.0, -1.0),
-    };
+    let ray = Ray::new(Point3::ZERO, Vec3::new(0.0, 0.0, -1.0));
+    let rec = bvh
+        .hit(&ray, Interval::new(0.001, f32::INFINITY))
+        .expect("El BVH debió reportar un impacto");
 
-    let hit_result = bvh_root.hit(&ray_into_void, Interval::new(0.001, f32::INFINITY));
-    
-    // 🟢 PRUEBA DE RENDIMIENTO INTELECTUAL: El test verifica que el método hit falle inmediatamente
-    // en la línea 1 del BvhNode de forma instantánea al no cruzar la caja raíz, abortando la recursión.
-    assert!(hit_result.is_none(), "El BVH debió descartar la rama y devolver None inmediatamente");
+    // La superficie de la esfera cercana está en z = -1
+    assert!(
+        (rec.t - 1.0).abs() < 1e-4,
+        "El árbol devolvió un impacto lejano ocultando el más cercano (t = {})",
+        rec.t
+    );
+}
+
+#[test]
+fn test_bvh_misses_when_ray_avoids_bounds() {
+    let bvh = Bvh::build(vec![sphere(101.0, 101.0, 101.0, 1.0)]);
+
+    // Rayo que se aleja del único objeto
+    let ray = Ray::new(Point3::ZERO, Vec3::new(0.0, 0.0, -1.0));
+    assert!(bvh.hit(&ray, Interval::new(0.001, f32::INFINITY)).is_none());
+}
+
+#[test]
+fn test_bvh_leaves_hold_multiple_primitives() {
+    // Con 4 primitivas o menos, todo cabe en una hoja: un solo nodo.
+    let small = Bvh::build(vec![
+        sphere(0.0, 0.0, 0.0, 0.5),
+        sphere(2.0, 0.0, 0.0, 0.5),
+        sphere(4.0, 0.0, 0.0, 0.5),
+        sphere(6.0, 0.0, 0.0, 0.5),
+    ]);
+    assert_eq!(small.node_count(), 1, "4 primitivas caben en una hoja");
+
+    // Con más, el árbol se parte y todas siguen alcanzables.
+    let big: Vec<Primitive> = (0..17)
+        .map(|i| sphere(i as f32 * 2.0, 0.0, 0.0, 0.5))
+        .collect();
+    let bvh = Bvh::build(big);
+    assert!(bvh.node_count() > 1);
+    assert_eq!(bvh.primitive_count(), 17);
+
+    for i in 0..17 {
+        let origin = Point3::new(i as f32 * 2.0, 5.0, 0.0);
+        let ray = Ray::new(origin, Vec3::new(0.0, -1.0, 0.0));
+        assert!(
+            bvh.hit(&ray, Interval::new(0.001, f32::INFINITY)).is_some(),
+            "la primitiva {i} quedó inalcanzable tras aplanar el árbol"
+        );
+    }
 }

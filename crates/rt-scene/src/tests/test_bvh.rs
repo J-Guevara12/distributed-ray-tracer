@@ -10,13 +10,13 @@ fn sphere(x: f32, y: f32, z: f32, radius: f32) -> Primitive {
 // AABB
 // =========================================================================
 
+fn unit_box() -> Aabb {
+    Aabb::from_points(Point3::splat(-1.0), Point3::splat(1.0))
+}
+
 #[test]
 fn test_aabb_ray_intersection_hit() {
-    let bbox = Aabb {
-        x: Interval::new(-1.0, 1.0),
-        y: Interval::new(-1.0, 1.0),
-        z: Interval::new(-1.0, 1.0),
-    };
+    let bbox = unit_box();
     let t_range = Interval::new(0.001, f32::INFINITY);
 
     let ray_front = Ray::new(Point3::new(0.0, 0.0, 5.0), Vec3::new(0.0, 0.0, -1.0));
@@ -34,11 +34,7 @@ fn test_aabb_ray_intersection_hit() {
 
 #[test]
 fn test_aabb_ray_intersection_miss() {
-    let bbox = Aabb {
-        x: Interval::new(-1.0, 1.0),
-        y: Interval::new(-1.0, 1.0),
-        z: Interval::new(-1.0, 1.0),
-    };
+    let bbox = unit_box();
     let t_range = Interval::new(0.001, f32::INFINITY);
 
     let paralelo = Ray::new(Point3::new(2.5, 0.0, 5.0), Vec3::new(0.0, 0.0, -1.0));
@@ -56,11 +52,7 @@ fn test_aabb_ray_intersection_miss() {
 
 #[test]
 fn test_aabb_interval_constraints() {
-    let bbox = Aabb {
-        x: Interval::new(1.0, 3.0),
-        y: Interval::new(1.0, 3.0),
-        z: Interval::new(1.0, 3.0),
-    };
+    let bbox = Aabb::from_points(Point3::splat(1.0), Point3::splat(3.0));
     let ray = Ray::new(Point3::new(2.0, 2.0, 0.0), Vec3::new(0.0, 0.0, 1.0));
 
     // El impacto físico ocurre en t = 1.0; el intervalo termina antes
@@ -72,25 +64,34 @@ fn test_aabb_interval_constraints() {
 
 #[test]
 fn test_aabb_surrounding_box() {
-    let box_a = Aabb {
-        x: Interval::new(-5.0, -2.0),
-        y: Interval::new(-5.0, -2.0),
-        z: Interval::new(-5.0, -2.0),
-    };
-    let box_b = Aabb {
-        x: Interval::new(1.0, 4.0),
-        y: Interval::new(1.0, 4.0),
-        z: Interval::new(1.0, 4.0),
-    };
+    let box_a = Aabb::from_points(Point3::splat(-5.0), Point3::splat(-2.0));
+    let box_b = Aabb::from_points(Point3::splat(1.0), Point3::splat(4.0));
 
     let big_box = Aabb::surrounding_box(box_a, box_b);
 
-    assert_eq!(big_box.x.min, -5.0);
-    assert_eq!(big_box.x.max, 4.0);
-    assert_eq!(big_box.y.min, -5.0);
-    assert_eq!(big_box.y.max, 4.0);
-    assert_eq!(big_box.z.min, -5.0);
-    assert_eq!(big_box.z.max, 4.0);
+    assert_eq!(big_box.min, Point3::splat(-5.0));
+    assert_eq!(big_box.max, Point3::splat(4.0));
+}
+
+/// `dir.z == 0` da `inv_dir.z = ±inf`, y si el origen cae justo sobre un plano
+/// de la caja el producto `0 * inf` es NaN. Hoy falla: el slab branchless
+/// descarta el rayo. Ver la nota de `Ray::new` sobre el clamp de `inv_dir`.
+#[test]
+#[ignore = "hueco conocido: rayo coplanar con una cara devuelve miss (NaN por 0 * inf)"]
+fn test_aabb_ray_coplanar_with_face() {
+    let bbox = Aabb::from_points(Point3::ZERO, Point3::splat(2.0));
+    let t_range = Interval::new(0.001, f32::INFINITY);
+
+    // Rayo contenido en el plano z = min.z, apuntando al interior de la cara.
+    let coplanar = Ray::new(Point3::new(-5.0, 1.0, 0.0), Vec3::new(1.0, 0.0, 0.0));
+    assert!(
+        bbox.hit(&coplanar, t_range),
+        "un rayo coplanar con la cara z = min.z se está descartando (NaN por 0 * inf)"
+    );
+
+    // Control: el mismo rayo desplazado apenas hacia adentro no depende del NaN.
+    let interior = Ray::new(Point3::new(-5.0, 1.0, 0.5), Vec3::new(1.0, 0.0, 0.0));
+    assert!(bbox.hit(&interior, t_range));
 }
 
 // =========================================================================
@@ -111,8 +112,8 @@ fn test_bvh_single_object_bounds() {
     let bvh = Bvh::build(vec![sphere(0.0, 0.0, 0.0, 1.0)]);
 
     assert_eq!(bvh.primitive_count(), 1);
-    assert_eq!(bvh.bounding_box().x.min, -1.0);
-    assert_eq!(bvh.bounding_box().x.max, 1.0);
+    assert_eq!(bvh.bounding_box().min.x, -1.0);
+    assert_eq!(bvh.bounding_box().max.x, 1.0);
 }
 
 #[test]
@@ -125,8 +126,8 @@ fn test_bvh_root_bounds_cover_every_primitive() {
     ]);
 
     let root = bvh.bounding_box();
-    assert_eq!(root.x.min, -10.0);
-    assert_eq!(root.x.max, 10.0);
+    assert_eq!(root.min.x, -10.0);
+    assert_eq!(root.max.x, 10.0);
 }
 
 #[test]

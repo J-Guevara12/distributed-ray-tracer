@@ -1,0 +1,14 @@
+{
+  "benchmark": "B2",
+  "name": "rtow-spheres",
+  "width": 1920,
+  "height": 1080,
+  "spp": 25000,
+  "max_depth": 100,
+  "tile_size": 32,
+  "commit": "7b9ca9da44d5",
+  "scene_hash": "de5736bc05547bba",
+  "camera_hash": "e9942ab622427ed6",
+  "render_seconds": 1909.957216414,
+  "timestamp": "2026-08-20T17:01:06.022046902+00:00"
+}

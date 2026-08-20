@@ -5,3 +5,4 @@ bench/stage/
 bench/plots/
 bench/.venv/
 scripts/__pycache__/*
+bench/reference/*.exr

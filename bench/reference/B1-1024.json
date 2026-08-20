@@ -1,0 +1,14 @@
+{
+  "benchmark": "B1",
+  "name": "cornell-glass",
+  "width": 1024,
+  "height": 1024,
+  "spp": 25000,
+  "max_depth": 100,
+  "tile_size": 32,
+  "commit": "7b9ca9da44d5",
+  "scene_hash": "e0c12580a7cde96f",
+  "camera_hash": "b920c0e8c22561cc",
+  "render_seconds": 2265.825594267,
+  "timestamp": "2026-08-20T16:29:15.917729192+00:00"
+}

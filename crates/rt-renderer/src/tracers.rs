@@ -8,6 +8,8 @@ pub struct RayContext {
     pub stats: RayStats,
 }
 
+const MIN_BOUNCES: u32 = 3;
+
 pub trait RayTracer: Send + Sync + 'static {
     fn trace_ray(
         &self,
@@ -67,7 +69,7 @@ impl RayTracer for PathTracer {
 
         let mut accumulated_light = Color::ZERO;
 
-        for _ in 0..self.max_depth {
+        for depth in 0..self.max_depth {
             let interval = Interval::new(0.001, f32::INFINITY);
 
             context.stats.rays += 1;
@@ -91,6 +93,14 @@ impl RayTracer for PathTracer {
                 }
             } else {
                 return accumulated_light + attenuation * scene.background.emit(&current_ray);
+            }
+            if depth >= MIN_BOUNCES {
+                let survive = attenuation.max_element().clamp(0.05, 1.0);
+                    if context.rng.f32() >= survive {
+                        return accumulated_light
+                    }
+                attenuation /= survive;
+
             }
         }
         accumulated_light

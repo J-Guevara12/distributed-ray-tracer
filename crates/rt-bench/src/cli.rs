@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+use crate::build;
+use crate::hardware;
 use crate::manifest::{self, WorkloadKind, discover_benches, parse_bench_config, select};
 use crate::reference::{self, ReferenceOptions};
 use crate::runner::{self, RunOptions};
@@ -49,9 +51,13 @@ pub struct RunArgs {
     /// Defaults to the short HEAD sha, or "workdir" when the tree is dirty
     #[arg(long)]
     pub label: Option<String>,
-    /// Matches the value hardcoded in `standalone`, which is what the
-    /// historical sweep measured — changing it breaks comparability.
-    #[arg(long, default_value_t=15)]
+    /// 15 until 2026-08-20, when Russian roulette landed. With roulette the
+    /// depth stops being the termination mechanism and becomes a safety net for
+    /// pathological paths (total internal reflection inside the glass sphere),
+    /// so a low cap only adds truncation bias. A diffuse path reaching 64 has
+    /// probability ~1e-7. `standalone` still hardcodes 15 for the historical
+    /// sweep; `env.max_depth` tells the two eras apart.
+    #[arg(long, default_value_t=64)]
     pub max_depth: u32,
     /// 128 until 2026-08-18. The sweep measured 32 at 98.5% parallel efficiency
     /// against 83.5% for 128: with 24 threads, 128px tiles leave the last
@@ -67,6 +73,15 @@ pub struct RunArgs {
     /// Directory holding the reference EXRs. Enables MSE and efficiency.
     #[arg(long)]
     pub reference: Option<PathBuf>,
+    /// Overrides `current` in bench/hardware.toml for this run.
+    #[arg(long)]
+    pub hardware: Option<String>,
+    #[arg(long, default_value_t=hardware::DEFAULT_PATH.to_string())]
+    pub hardware_file: String,
+    /// Rebuild in release and re-exec before measuring. Without it, a binary
+    /// older than the sources is refused rather than measured.
+    #[arg(long)]
+    pub build: bool,
     #[arg(long)]
     pub allow_dirty: bool,
 }
@@ -113,6 +128,10 @@ pub struct ReferenceArgs {
     pub spp: u32,
     #[arg(long, default_value_t="./bench/reference".to_string())]
     pub out_dir: String,
+    /// Rebuild in release and re-exec before rendering. Generating a reference
+    /// from a stale binary wastes an hour and produces a wrong ground truth.
+    #[arg(long)]
+    pub build: bool,
     #[arg(long)]
     pub allow_dirty: bool,
 }
@@ -156,6 +175,17 @@ impl Cli {
             }
 
             Commands::Run(args) => {
+                if args.build {
+                    if build::ensure_fresh(Path::new(".")).is_err() {
+                        build::rebuild_and_reexec()?;
+                    }
+                } else {
+                    build::ensure_fresh(Path::new("."))?;
+                }
+
+                let hardware =
+                    hardware::load(Path::new(&args.hardware_file), args.hardware.as_deref())?;
+
                 let base_dir = Path::new(&args.base_dir);
                 let config_files = discover_benches(base_dir, &args.file_name)?;
                 let benches = select(parse_bench_config(config_files)?, &args.only)?;
@@ -170,12 +200,21 @@ impl Cli {
                     out: (!args.no_record).then(|| args.out.clone()),
                     allow_dirty: args.allow_dirty,
                     reference_dir: args.reference.clone(),
+                    hardware,
                 };
 
                 runner::run(&benches, &opts)?;
             }
 
             Commands::Reference(args) => {
+                if args.build {
+                    if build::ensure_fresh(Path::new(".")).is_err() {
+                        build::rebuild_and_reexec()?;
+                    }
+                } else {
+                    build::ensure_fresh(Path::new("."))?;
+                }
+
                 let base_dir = Path::new(&args.base_dir);
                 let config_files = discover_benches(base_dir, &args.file_name)?;
                 let benches = select(parse_bench_config(config_files)?, &args.only)?;

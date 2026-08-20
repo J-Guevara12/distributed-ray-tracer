@@ -2,8 +2,10 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
+mod build;
 mod cli;
 mod env;
+mod hardware;
 mod manifest;
 mod report;
 mod reference;

@@ -14,6 +14,7 @@ pub struct Record {
     pub width: u32,
     pub height: u32,
     pub spp: u32,
+    pub hardware: String,
     pub commit: String,
     pub commit_label: String,
     pub commit_subject: String,

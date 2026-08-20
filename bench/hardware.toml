@@ -1,0 +1,22 @@
+# Hardware generation the benchmarks are measured on. Wall time only compares
+# within one machine and one configuration of it, so an unlabelled change to
+# either is indistinguishable from a code change.
+#
+# Bump `current` before measuring on new hardware. `rt-bench --hardware <id>`
+# overrides it for a single run.
+
+current = "gen1"
+
+[gen0]
+description = "i7-14700HX, 24 threads, Linux VM on a Windows host"
+note = """
+Host power saving was on, and the guest cannot see it: /proc does not expose the
+real frequency, so cpu_mhz is null in every one of these records and the
+throttling guard was blind. Measured 1.40x slower than gen1 on the same code.
+Ratios within a single run stay valid; absolutes and comparisons against gen1 do
+not. Covers everything up to 2026-08-19.
+"""
+
+[gen1]
+description = "i7-14700HX, 24 threads, Linux VM on a Windows host, host on high performance"
+note = "Same machine as gen0 with host power saving off."

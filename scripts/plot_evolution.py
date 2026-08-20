@@ -25,6 +25,10 @@ OUT_DIR = REPO / "bench" / "plots"
 
 # Cargas de las corridas anteriores a que el registro trajera width/spp.
 # (hash de bench.toml, config) -> (width, spp)
+# Los registros anteriores a 2026-08-20 no llevan el campo `hardware`. Todos se
+# tomaron con el ahorro de energía del host activo, que es lo que define gen0.
+LEGACY_HARDWARE = "gen0"
+
 LEGACY_WORKLOADS = {
     ("93f81f40190c645c", "quick"): (640, 64),
     ("80777a51f6822816", "quick"): (1920, 20),
@@ -84,6 +88,7 @@ def load():
 
         r["_key"] = (hashes.get("scene"), hashes.get("camera"), workload)
         r["_workload"] = workload
+        r["_hardware"] = r.get("hardware") or LEGACY_HARDWARE
 
     if unknown:
         for manifest, config in sorted(unknown):
@@ -172,6 +177,14 @@ def parse_args():
         help="graficar desde este punto en adelante",
     )
     parser.add_argument(
+        "--hardware",
+        nargs="*",
+        metavar="GEN",
+        help="graficar solo estas generaciones de hardware (gen0, gen1, server1...). "
+             "Sin el flag usa la más reciente que haya en el historial; con "
+             "--hardware sin valores, todas.",
+    )
+    parser.add_argument(
         "-b",
         "--back",
         type=int,
@@ -181,9 +194,43 @@ def parse_args():
     return parser.parse_args()
 
 
+def filter_hardware(rows, selection):
+    """Mezclar generaciones en una serie de tiempos es exactamente el error que
+    el campo `hardware` existe para evitar: un cambio de máquina se ve idéntico
+    a un cambio de código. Por eso el default es una sola, no todas."""
+    present = sorted({r["_hardware"] for r in rows})
+
+    if selection == []:                      # --hardware sin valores
+        if len(present) > 1:
+            print(f"aviso: graficando {len(present)} generaciones juntas ({', '.join(present)}); "
+                  f"los saltos entre ellas no son cambios de código", file=sys.stderr)
+        return rows, present
+
+    if selection is None:
+        # La más reciente por timestamp, que es lo que casi siempre se quiere.
+        newest = max(rows, key=lambda r: r["timestamp"])["_hardware"]
+        chosen = [newest]
+        if len(present) > 1:
+            print(f"aviso: el historial tiene {', '.join(present)}; se grafica {newest}. "
+                  f"Usá --hardware para elegir, o --hardware sin valores para todas.",
+                  file=sys.stderr)
+    else:
+        unknown = [gen for gen in selection if gen not in present]
+        if unknown:
+            raise SystemExit(f"error: no hay registros de {', '.join(unknown)}. "
+                             f"Presentes: {', '.join(present)}")
+        chosen = selection
+
+    return [r for r in rows if r["_hardware"] in chosen], chosen
+
+
 def main():
     args = parse_args()
     rows = load()
+
+    rows, hardware = filter_hardware(rows, args.hardware)
+    if not rows:
+        raise SystemExit("error: el filtro de hardware no dejó ningún registro")
 
     # El filtro va antes de elegir la carga: si pides los últimos N commits,
     # quieres la revisión de manifiesto que esos N comparten.
@@ -238,7 +285,9 @@ def main():
                 )
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    scope = ""
+    # La generación va en el título: un gráfico de tiempos sin decir sobre qué
+    # máquina se tomó no es interpretable.
+    scope = f"  [{', '.join(hardware)}]"
     if args.start:
         scope += f"  desde {args.start}"
     if args.back:

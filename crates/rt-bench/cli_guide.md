@@ -113,8 +113,12 @@ Usage: rt-bench run [OPTIONS]
       --reps <REPS>            recorded repetitions    [default: 5]
       --cooldown <COOLDOWN>    seconds between runs    [default: 20]
       --label <LABEL>          [default: short HEAD sha, or "workdir" if dirty]
-      --max-depth <MAX_DEPTH>  [default: 15]
+      --max-depth <MAX_DEPTH>  [default: 64]
       --tile-size <TILE_SIZE>  [default: 32]
+      --reference <DIR>        reference EXRs; enables mse and efficiency
+      --hardware <ID>          override `current` in bench/hardware.toml
+      --hardware-file <PATH>   [default: ./bench/hardware.toml]
+      --build                  rebuild in release and re-exec first
       --out <OUT>              [default: ./bench/history.jsonl]
       --no-record              measure and print without writing
       --allow-dirty            allow measuring an uncommitted tree
@@ -122,9 +126,28 @@ Usage: rt-bench run [OPTIONS]
 
 ### Options that need care
 
-**`--max-depth`.** Defaults to 15, the value hardcoded in `standalone`, which is
-what the historical sweep measured. Changing it produces numbers that cannot be
-compared against the existing historical records.
+**`--max-depth`.** Defaults to 64 since 2026-08-20; it was 15 before. Russian
+roulette changed what this option *is*: it used to be the termination mechanism,
+and now it is a safety net for pathological paths — total internal reflection
+inside the glass sphere is the realistic case. A diffuse path reaching depth 64
+has probability around 1e-7, so the cap costs nothing and removes the truncation
+bias that a low cap bakes in.
+
+`standalone` still hardcodes 15 because it is the instrument the historical
+sweep replays, and those commits predate roulette. `env.max_depth` separates the
+two eras.
+
+**`--hardware` and `--hardware-file`.** See *Hardware generations* below. The
+generation is read from `bench/hardware.toml` on every run; `--hardware` is a
+one-off override for a machine you have not added to the file yet.
+
+**`--build`.** `rt-bench` measures the renderer linked into itself, so a stale
+binary measures stale code under the new commit's label. That already cost a
+full round of F0.7 measurements. The freshness check runs **always** and refuses
+to measure when any file under `crates/` (or `Cargo.toml`, `Cargo.lock`,
+`.cargo/config.toml`) is newer than the binary. `--build` rebuilds and re-execs
+instead of refusing, which is the only thing that can actually measure the new
+code — recompiling in-process would not, since the old code is already loaded.
 
 **`--tile-size`.** Defaults to 32 since 2026-08-18; it was 128 before, and
 records on either side of that line are not comparable. `env.tile_size` in the
@@ -226,14 +249,52 @@ schema admits **new** fields only, never renamed or repurposed ones.
 | `rep`, `wall_ms` | render time only |
 | `build_ms` | scene + BVH construction. `rt-bench` only — the sweep cannot measure it |
 | `rays`, `rays_per_sec`, `node_visits`, `prim_tests`, `image_hash`, `mse` | explicit `null` until F0.3b / F0.8 / F0.3c land |
-| `cpu_mhz` | best effort; `null` inside a VM where cpufreq is not exposed |
+| `hardware` | generation id, e.g. `"gen1"`. **Filter on this before comparing any wall time.** Absent in records before 2026-08-20, which are all `gen0` |
+| `mse`, `relative_mse`, `efficiency` | error against the reference image and `1/(mse·s)`. `null` unless `--reference` was passed |
+| `reference_spp`, `reference_max_depth` | how the reference was rendered, to audit the noise floor without opening the sidecar |
+| `cpu_mhz` | best effort; `null` inside a VM where cpufreq is not exposed — which is why `hardware` is not optional |
 | `timestamp` | RFC 3339, UTC |
-| `env` | rustc, cpu, thread count, platform, scene hashes, dirty flag, driver, `max_depth`, `tile_size` |
+| `env` | rustc, cpu, thread count, platform, scene hashes, dirty flag, driver, `max_depth`, `tile_size`, `hardware` (id + description, so the record reads standalone) |
 
 `env.scene_hashes` holds a truncated sha256 of `scene.json`, `camera.json` and
 `bench.toml` per benchmark, computed identically to the Python driver. If a
 scene is ever edited, its hash changes and older records become visibly
 incomparable without anyone having to police it.
+
+---
+
+## Hardware generations
+
+Wall time is only comparable within one machine **and** one configuration of
+that machine. `bench/hardware.toml` names the active generation:
+
+```toml
+current = "gen1"
+
+[gen0]
+description = "i7-14700HX, 24 threads, Linux VM on a Windows host"
+note = "Host power saving was on. 1.40x slower. Everything up to 2026-08-19."
+
+[gen1]
+description = "same machine, host power saving off"
+```
+
+Bump `current` **before** measuring on new hardware. `rt-bench` fails rather
+than guess: a missing file or a `current` naming an undefined generation is an
+error, because an unlabelled measurement is the exact problem this solves.
+
+`gen0` is not a hypothetical. The Windows host had a power-saving plan enabled
+and the guest cannot see it: `/proc` does not expose the real frequency, so
+`cpu_mhz` was `null` in every one of those records and the throttling guard was
+blind to it. B1 `quick` measured 603 ms then and 430 ms after, with no code
+change.
+
+What survives the boundary: **ratios measured inside a single interleaved run**.
+The BVH speedup, the tile-size sweep, the codegen-flag null result — all of
+those are deltas against a baseline taken in the same session, and a uniform
+multiplier cancels. What does not survive: absolute rates, and any comparison
+that spans generations. `scripts/plot_evolution.py` therefore plots **one
+generation by default** and warns when asked for more.
 
 ---
 

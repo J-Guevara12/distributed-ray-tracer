@@ -105,6 +105,53 @@ Scenes are JSON documents with a `materials` map and an `objects` list:
 
 Camera configuration is a separate JSON document sent to `PUT /camera`.
 
+## Benchmarking
+
+Measurements live in `bench/history.jsonl`, one JSON object per run. See
+`crates/rt-bench/cli_guide.md` for the full CLI.
+
+```bash
+cargo build --release -p rt-bench
+./target/release/rt-bench run --config full --build
+```
+
+### Hardware generations
+
+Wall time only compares within one machine *and* one configuration of that
+machine. `bench/hardware.toml` names the current one, and every record carries
+it at the top level:
+
+```toml
+current = "gen1"
+
+[gen1]
+description = "i7-14700HX, 24 threads, Linux VM on a Windows host, high performance"
+```
+
+**Bump `current` before measuring on new hardware** — a new machine, a different
+power plan, a server. Otherwise the discontinuity gets mixed in with your code
+changes and there is no way to separate them afterwards.
+
+This is not hypothetical: `gen0` exists because the Windows host had power
+saving enabled, which made every measurement up to 2026-08-19 run 1.40x slower.
+The guest cannot see the host's power policy — `cpu_mhz` was `null` in all of
+those records — so nothing caught it.
+
+Ratios measured *within* a single interleaved run stay valid across the
+boundary. Absolute numbers and cross-generation comparisons do not.
+
+```bash
+./target/release/rt-bench run --hardware server1     # one-off override
+python3 scripts/plot_evolution.py --hardware gen1    # plot one generation
+python3 scripts/plot_evolution.py --hardware         # all of them, with a warning
+```
+
+### Stale binaries
+
+`rt-bench` measures the renderer linked *into itself*, so running an old binary
+measures old code under the new commit's label. It refuses to run when any
+source file is newer than the binary; `--build` rebuilds and re-execs instead.
+
 ## Architecture Notes
 
 - The renderer runs on a dedicated thread pool (Rayon). Each tile is processed independently and its result is broadcast over a Tokio channel.

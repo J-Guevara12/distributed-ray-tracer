@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
 """
-Barrida histórica de rendimiento.
+Historical performance sweep.
 
-Mide el renderer en varios commits SIN modificar su código fuente. Para cada
-commit crea un worktree, inyecta los archivos de escena congelados (que son
-datos, no código) y el perfil de compilación, compila `standalone` y parsea el
-tiempo que ya imprime por stdout.
+Measures the renderer across several commits WITHOUT modifying their source. For
+each commit it creates a worktree, injects the frozen scene files (data, not
+code) and the build profile, compiles `standalone` and parses the time it
+already prints to stdout.
 
-Por eso este driver vive FUERA del código medido y está escrito en Python: en
-los commits viejos el crate `rt-bench` todavía no existe, así que la barrida no
-puede depender de él. `rt-bench` se usa de HEAD en adelante; este script se usa
-para reconstruir el pasado.
+This driver lives OUTSIDE the measured code and is written in Python because the
+`rt-bench` crate does not exist at the older commits, so the sweep cannot depend
+on it. `rt-bench` covers HEAD onward; this script reconstructs the past.
 
-Notas de diseño:
+Design notes:
 
-  * El timer de `standalone` envuelve solo `render_scene`, así que el parseo de
-    la escena y la construcción del BVH quedan FUERA de la medición.
-  * Las corridas se INTERCALAN entre commits en lugar de agrupar todas las
-    repeticiones de cada uno. En un portátil el chip se calienta durante la
-    barrida; agrupando, los commits tardíos parecerían más lentos por
-    termodinámica y no por código.
-  * Cada binario se copia fuera de su worktree y el worktree se destruye, para
-    no acumular decenas de GB de directorios `target/`.
+  * `standalone`'s timer wraps only `render_scene`, so scene parsing and BVH
+    construction fall OUTSIDE the measurement.
+  * Runs are INTERLEAVED across commits rather than grouped per commit. On a
+    laptop the chip heats up during the sweep; grouped, the later commits would
+    look slower for thermal reasons rather than code reasons.
+  * Each binary is copied out of its worktree and the worktree destroyed, to
+    avoid accumulating tens of GB of `target/` directories.
 
-Uso:
+Usage:
     python3 scripts/bench_sweep.py --config quick
     python3 scripts/bench_sweep.py --config full --reps 3 --cooldown 45
 """
@@ -52,15 +50,15 @@ STAGE_DIR = BENCH_DIR / "stage"
 HISTORY = BENCH_DIR / "history.jsonl"
 WORKTREE_ROOT = REPO.parent / ".rt-bench-worktrees"
 
-# Rutas que `standalone` tiene hardcodeadas. El driver copia los archivos del
-# benchmark a estas rutas dentro del worktree.
+# Paths `standalone` hardcodes. The driver copies the benchmark files here
+# inside each worktree.
 STANDALONE_SCENE = "scenes/spheres_scene.json"
 STANDALONE_CAMERA = "scenes/spheres_camera.json"
 
 TIME_RE = re.compile(r"Procesado en (\d+) ms")
 
-# Los commits que cambian rendimiento. Los intermedios que implementan el BVH
-# pero todavía no lo usan se omiten a propósito: rinden igual que el anterior.
+# Commits that change performance. The intermediate ones that implement the BVH
+# without using it yet are skipped: they perform the same as their predecessor.
 COMMITS = [
     ("0aa2a51", "pre-bvh"),
     ("1efe2e8", "bvh-enabled"),
@@ -76,16 +74,35 @@ COMMITS = [
     ("99b68a4", "f0.4-determinism"),
     ("8f00613", "f0.5-parking-lot"),
     ("4948a99", "f0.6-material-enum"),
+    ("f6fa908", "f0.8-flat-bvh"),
+    ("03eecf6", "f0.8-aabb-simd"),
+    ("c450c47", "f0.8-traversal-stats"),
+    ("8d2160e", "f0.9-tile-size-32"),
+    ("9d733a8", "f0.9-russian-roulette"),
 ]
 
-# El perfil hay que inyectarlo siempre: los commits viejos no traen
-# `[profile.release]` ni `.cargo/config.toml`, así que sin esto cada commit se
-# compilaría con flags distintos y la comparación no valdría.
+STANDALONE_TILE_SIZE = 128
+STANDALONE_MAX_DEPTH = 15
+
+TILE_SIZE_OVERRIDES = {"8d2160e": 32}
+
+
+def tile_size_for(sha: str) -> int:
+    size = STANDALONE_TILE_SIZE
+    for commit, _ in COMMITS:
+        size = TILE_SIZE_OVERRIDES.get(commit, size)
+        if commit == sha:
+            break
+    return size
+
+# The profile always has to be injected: the older commits carry no
+# `[profile.release]` nor `.cargo/config.toml`, so without this each commit would
+# compile with different flags and the comparison would be worthless.
 #
-# Solo se mide `optimized`. La barrida del 2026-08-13 midió también `default`
-# (lto/cu/target-cpu desactivados) y la diferencia salió ~0% incluso en las
-# filas de baja varianza — ese resultado ya está en history.jsonl. Se puede
-# reproducir con `--profiles default optimized`.
+# Only `optimized` is measured. The 2026-08-13 sweep also measured `default`
+# (lto/cu/target-cpu off) and the difference came out ~0% even in the low-variance
+# rows; that result is already in history.jsonl. Reproduce it with
+# `--profiles default optimized`.
 PROFILES = ["optimized"]
 
 OPTIMIZED_PROFILE = """
@@ -98,18 +115,15 @@ OPTIMIZED_CARGO_CONFIG = """[build]
 rustflags = ["-C", "target-cpu=native"]
 """
 
-# `standalone` hardcodeaba el gradiente de cielo y descartaba el background que
-# declara la escena. Para B2 da igual (declara justo ese gradiente), pero para
-# un Cornell box es fatal: el frente está abierto, así que un cielo brillante
-# entra como segunda fuente de luz y la escena deja de ser "luz pequeña".
+# `standalone` used to hardcode the sky gradient and discard the background the
+# scene declares. Harmless for B2 (which declares exactly that gradient), fatal
+# for a Cornell box: the front is open, so a bright sky enters as a second light
+# source and the scene stops being "small light".
 #
-# Es la ÚNICA inyección de código de toda la barrida, y se permite porque:
-#   * la línea es byte-idéntica en los 6 commits, así que la sustitución es
-#     mecánica y no requiere resolver ningún conflicto;
-#   * no toca el bucle de render — cambia qué valor se pasa, no código que
-#     corra por rayo;
-#   * se aplica IGUAL en todos los commits, así que no sesga la comparación.
-# El driver verifica que haya exactamente una coincidencia antes de sustituir.
+# Allowed because the line is byte-identical across those commits, it changes a
+# value rather than code that runs per ray, and it is applied the SAME way
+# everywhere, so it does not bias the comparison. The driver checks there is
+# exactly one match before substituting.
 BACKGROUND_HARDCODED = (
     "let background = Background::new_gradient("
     "Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0));"
@@ -117,18 +131,40 @@ BACKGROUND_HARDCODED = (
 BACKGROUND_FROM_SCENE = "let background = scene_payload.background.clone();"
 
 STANDALONE_SRC = "crates/rt-renderer/src/bin/standalone.rs"
+HARDWARE_FILE = REPO / "bench" / "hardware.toml"
+
+
+def read_hardware(override: str | None) -> tuple[str, dict]:
+    """Same source of truth as `rt-bench`: bench/hardware.toml."""
+    if not HARDWARE_FILE.exists():
+        sys.exit(f"falta {HARDWARE_FILE}. Es lo que etiqueta la generación de "
+                 f"hardware; sin él un cambio de máquina se confunde con un "
+                 f"cambio de código.")
+
+    data = tomllib.loads(HARDWARE_FILE.read_text())
+    ident = override or data.get("current")
+    generations = {k: v for k, v in data.items() if isinstance(v, dict)}
+
+    if ident not in generations:
+        sys.exit(f"{HARDWARE_FILE} no define la generación {ident!r}. "
+                 f"Definidas: {', '.join(sorted(generations))}")
+
+    return ident, {"id": ident, **generations[ident]}
 
 
 @dataclass
 class Result:
     benchmark: str
     config: str
-    # La carga real, explícita. El nombre de la config NO basta: `quick` de B2
-    # fue 640/64 antes del 2026-08-13 y 1920/20 después, y agregar por
-    # (benchmark, config) mezclaría datos incomparables. Con estos dos campos
-    # el registro se explica solo sin tener que mirar el hash del manifiesto.
+    # The real workload, explicit. The config *name* is not enough: B2's `quick`
+    # was 640/64 before 2026-08-13 and 1920/20 after, so grouping by
+    # (benchmark, config) would mix incomparable data.
     width: int
     spp: int
+    # Read from bench/hardware.toml, same as rt-bench. Without it a fresh sweep
+    # would be indistinguishable from the old ones, which were taken with host
+    # power saving on.
+    hardware: str
     commit: str
     commit_label: str
     commit_subject: str
@@ -136,8 +172,8 @@ class Result:
     profile: str
     rep: int
     wall_ms: int
-    # Campos que solo `rt-bench` puede llenar (necesitan instrumentación
-    # interna). Se dejan explícitos en null para que el esquema sea el mismo.
+    # Only `rt-bench` can fill these; they need internal instrumentation. Left
+    # explicitly null so the schema stays identical.
     rays: int | None = None
     rays_per_sec: float | None = None
     node_visits: int | None = None
@@ -154,7 +190,7 @@ def run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> str:
     )
     if check and proc.returncode != 0:
         raise RuntimeError(
-            f"comando falló: {' '.join(cmd)}\n"
+            f"command failed: {' '.join(cmd)}\n"
             f"cwd={cwd}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
         )
     return proc.stdout
@@ -169,8 +205,8 @@ def file_sha(path: Path) -> str:
 
 
 def read_cpu_model() -> str:
-    """`platform.processor()` en Linux suele venir vacío; el modelo real
-    importa para poder atribuir mediciones entre máquinas."""
+    """`platform.processor()` is usually empty on Linux, and the real model
+    matters for attributing measurements across machines."""
     try:
         for line in Path("/proc/cpuinfo").read_text().splitlines():
             if line.startswith("model name"):
@@ -181,7 +217,7 @@ def read_cpu_model() -> str:
 
 
 def read_cpu_mhz() -> float | None:
-    """Mejor esfuerzo: dentro de una VM cpufreq suele no estar expuesto."""
+    """Best effort: inside a VM cpufreq is usually not exposed."""
     freqs = list(Path("/sys/devices/system/cpu").glob("cpu*/cpufreq/scaling_cur_freq"))
     if not freqs:
         return None
@@ -193,14 +229,14 @@ def read_cpu_mhz() -> float | None:
 
 
 def strip_release_profile(text: str) -> str:
-    """Elimina la sección [profile.release] preservando el resto del archivo."""
+    """Drops the [profile.release] section, preserving the rest of the file."""
     lines = text.splitlines(keepends=True)
     out: list[str] = []
     skipping = False
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("["):
-            # Cualquier encabezado nuevo termina la sección que estemos saltando.
+            # Any new header ends whatever section we are skipping.
             skipping = stripped == "[profile.release]"
         if not skipping:
             out.append(line)
@@ -211,8 +247,8 @@ def apply_profile(worktree: Path, profile: str) -> None:
     cargo_toml = worktree / "Cargo.toml"
     cargo_config = worktree / ".cargo" / "config.toml"
 
-    # Partimos siempre de un Cargo.toml sin perfil: los commits recientes ya lo
-    # traen y hay que quitarlo para medir el perfil `default`.
+    # Always start from a Cargo.toml with no profile: the recent commits ship
+    # one, and it has to go to measure the `default` profile.
     text = strip_release_profile(cargo_toml.read_text())
 
     if profile == "optimized":
@@ -227,11 +263,11 @@ def apply_profile(worktree: Path, profile: str) -> None:
 
 def patch_standalone(worktree: Path) -> bool:
     """
-    Hace que `standalone` respete el background declarado por la escena.
+    Makes `standalone` respect the background the scene declares.
 
-    Devuelve True si hubo que parchar, False si el commit ya lo hacía bien.
-    Lanza si encuentra algo inesperado, para no medir en silencio una escena
-    distinta de la que se pidió.
+    True if it had to patch, False if the commit already did the right thing.
+    Raises on anything unexpected, so it cannot silently measure a scene other
+    than the one that was asked for.
     """
     src = worktree / STANDALONE_SRC
     text = src.read_text()
@@ -241,12 +277,43 @@ def patch_standalone(worktree: Path) -> bool:
         src.write_text(text.replace(BACKGROUND_HARDCODED, BACKGROUND_FROM_SCENE))
         return True
     if hits == 0 and "scene_payload.background" in text:
-        return False  # el commit ya lee el background de la escena
+        return False  # the commit already reads the background from the scene
     raise RuntimeError(
-        f"{src}: se esperaba 1 coincidencia del background hardcodeado y se "
-        f"encontraron {hits}, sin que el archivo lea `scene_payload.background`. "
-        f"La barrida mediría una escena distinta de la declarada."
+        f"{src}: expected 1 match of the hardcoded background and found {hits}, "
+        f"without the file reading `scene_payload.background`. The sweep would "
+        f"measure a scene other than the declared one."
     )
+
+
+def patch_tile_size(worktree: Path, size: int) -> bool:
+    """
+    Overrides `standalone`'s hardcoded tile size.
+
+    True if it had to patch. Raises when the literal does not appear exactly
+    once, so it cannot silently measure a configuration other than the one that
+    was asked for.
+    """
+    if size == STANDALONE_TILE_SIZE:
+        return False
+
+    src = worktree / STANDALONE_SRC
+    text = src.read_text()
+    wanted = f"\n        {size},\n"
+
+    if wanted in text:
+        return False  # reused worktree, already patched
+
+    literal = f"\n        {STANDALONE_TILE_SIZE},\n"
+    hits = text.count(literal)
+    if hits != 1:
+        raise RuntimeError(
+            f"{src}: expected 1 match of `{STANDALONE_TILE_SIZE},` as the tile size "
+            f"argument and found {hits}. The sweep would measure a configuration "
+            f"other than the declared one."
+        )
+
+    src.write_text(text.replace(literal, wanted))
+    return True
 
 
 def load_benchmarks(only: str | None) -> list[dict]:
@@ -268,11 +335,11 @@ def load_benchmarks(only: str | None) -> list[dict]:
 
 def make_stage(bench: dict, config: str) -> Path:
     """
-    Materializa un directorio de trabajo con los archivos de escena que
-    `standalone` espera en sus rutas hardcodeadas.
+    Materialises a working directory with the scene files `standalone` expects
+    at its hardcoded paths.
 
-    El `camera.json` se genera parchando width y spp desde bench.toml, de modo
-    que los valores commiteados en camera.json nunca definen la carga.
+    `camera.json` is generated by patching width and spp from bench.toml, so the
+    values committed in camera.json never define the workload.
     """
     cfg = bench[config]
     stage = STAGE_DIR / f"{bench['name']}-{config}"
@@ -289,7 +356,7 @@ def make_stage(bench: dict, config: str) -> Path:
 
 
 def build_all(commits, profiles, keep_worktrees: bool) -> dict[tuple[str, str], Path]:
-    """Compila un binario por (commit, perfil) y lo copia fuera del worktree."""
+    """Builds one binary per (commit, profile) and copies it out of the worktree."""
     BIN_DIR.mkdir(parents=True, exist_ok=True)
     WORKTREE_ROOT.mkdir(exist_ok=True)
     binaries: dict[tuple[str, str], Path] = {}
@@ -304,6 +371,10 @@ def build_all(commits, profiles, keep_worktrees: bool) -> dict[tuple[str, str], 
 
         patched = patch_standalone(worktree)
         print(f"    background: {'parchado' if patched else 'ya correcto'}")
+
+        tile_size = tile_size_for(sha)
+        patch_tile_size(worktree, tile_size)
+        print(f"    tile_size: {tile_size}")
 
         for profile in profiles:
             dest = BIN_DIR / f"{label}-{profile}"
@@ -322,8 +393,8 @@ def build_all(commits, profiles, keep_worktrees: bool) -> dict[tuple[str, str], 
             binaries[(sha, profile)] = dest
 
         if not keep_worktrees:
-            # El target/ de un build con lto=fat pesa GB; el binario ya está a
-            # salvo, así que el worktree completo se puede tirar.
+            # The target/ of an lto=fat build weighs GB, and the binary is
+            # already safe, so the whole worktree can go.
             shutil.rmtree(worktree / "target", ignore_errors=True)
             git("worktree", "remove", "--force", str(worktree))
 
@@ -335,7 +406,7 @@ def measure(binary: Path, stage: Path) -> int:
     match = TIME_RE.search(stdout)
     if not match:
         raise RuntimeError(
-            f"no se encontró el tiempo en la salida de {binary.name}:\n{stdout}"
+            f"no timing found in the output of {binary.name}:\n{stdout}"
         )
     return int(match.group(1))
 
@@ -343,6 +414,8 @@ def measure(binary: Path, stage: Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="quick", choices=["quick", "full"])
+    parser.add_argument("--hardware", default=None,
+                        help="sobreescribe `current` de bench/hardware.toml")
     parser.add_argument("--reps", type=int, default=None,
                         help="repeticiones grabadas (default: 5 quick / 3 full)")
     parser.add_argument("--cooldown", type=float, default=None,
@@ -355,6 +428,7 @@ def main() -> int:
                         help="permitir barrida con el árbol sucio (no recomendado)")
     args = parser.parse_args()
 
+    hardware_id, hardware_meta = read_hardware(args.hardware)
     reps = args.reps or (5 if args.config == "quick" else 3)
     cooldown = args.cooldown if args.cooldown is not None else (
         20.0 if args.config == "quick" else 45.0
@@ -373,6 +447,7 @@ def main() -> int:
 
     print(f"Benchmarks: {', '.join(b['id'] + '/' + b['name'] for b in benchmarks)}")
     print(f"Commits:    {len(COMMITS)}   Perfiles: {', '.join(args.profiles)}")
+    print(f"Hardware:   {hardware_id}  ({hardware_meta['description']})")
     print(f"Config:     {args.config}   reps={reps}  cooldown={cooldown}s")
     print()
 
@@ -389,9 +464,8 @@ def main() -> int:
         for sha, _ in COMMITS
     }
 
-    # Cada unidad de trabajo es una combinación completa. Iteramos las
-    # repeticiones por fuera para intercalar y decorrelacionar la deriva
-    # térmica del orden de los commits.
+    # One unit of work is a full combination. Repetitions loop on the outside so
+    # the runs interleave and thermal drift decorrelates from commit order.
     units = [
         (bench, sha, label, profile)
         for bench in benchmarks
@@ -418,6 +492,7 @@ def main() -> int:
                 config=args.config,
                 width=bench[args.config]["width"],
                 spp=bench[args.config]["spp"],
+                hardware=hardware_id,
                 commit=full_sha[:12],
                 commit_label=label,
                 commit_subject=subject,
@@ -447,15 +522,16 @@ def main() -> int:
         },
         "dirty": dirty,
         "driver": Path(__file__).name,
-        # Única inyección de código de la barrida; queda registrada para que
-        # los resultados sean autoexplicativos.
+        # The sweep's code injections, recorded so the results explain
+        # themselves.
         "standalone_background_patch": True,
-        # `standalone` los tiene hardcodeados e idénticos en los 6 commits.
-        # `rt-bench` los va a hacer configurables, así que hay que dejar
-        # constancia de con cuáles se tomaron estas mediciones.
-        "max_depth": 15,
-        "tile_size": 128,
+        "max_depth": STANDALONE_MAX_DEPTH,
+        "hardware": hardware_meta,
     }
+
+    # `tile_size` cannot live in the shared env: the sweep varies it per commit,
+    # so it is resolved per record at write time.
+    tile_size_by_label = {label: tile_size_for(sha) for sha, label in COMMITS}
 
     for bench in benchmarks:
         cfg = bench[args.config]
@@ -475,8 +551,8 @@ def main() -> int:
                 continue
 
             median = statistics.median(samples)
-            # Spread relativo: si supera ~10% el dato no resuelve diferencias
-            # pequeñas y conviene subir la resolución o las repeticiones.
+            # Relative spread: above ~10% the data cannot resolve small
+            # differences and it is worth raising resolution or repetitions.
             spread = (max(samples) - min(samples)) / median * 100
             flag = " !" if spread > 10 else ""
             change = f"×{previous / median:.2f}" if previous else ""
@@ -493,7 +569,8 @@ def main() -> int:
     BENCH_DIR.mkdir(exist_ok=True)
     with HISTORY.open("a") as fh:
         for r in results:
-            fh.write(json.dumps({**asdict(r), "env": env}) + "\n")
+            record_env = {**env, "tile_size": tile_size_by_label[r.commit_label]}
+            fh.write(json.dumps({**asdict(r), "env": record_env}) + "\n")
     print(f"\n{len(results)} resultados añadidos a {HISTORY.relative_to(REPO)}")
 
     return 0

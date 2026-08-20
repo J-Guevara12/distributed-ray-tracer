@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 
 use rt_core::Vec4;
 
+use crate::hardware::Hardware;
 use crate::manifest::Benchmark;
 
 #[derive(Serialize, Clone)]
@@ -22,6 +23,7 @@ pub struct Env {
     pub driver: &'static str,
     pub max_depth: u32,
     pub tile_size: u32,
+    pub hardware: Hardware,
 }
 
 #[derive(Serialize, Clone)]
@@ -65,9 +67,6 @@ pub fn head_commit() -> anyhow::Result<Commit> {
     })
 }
 
-/// Ignora `bench/`: el guard existe para garantizar que el código medido
-/// corresponde al commit, y correr un benchmark modifica `history.jsonl`, que
-/// dejaría sucio el árbol para la corrida siguiente.
 pub fn is_dirty() -> anyhow::Result<bool> {
     let status = git(&["status", "--porcelain"])?;
 
@@ -149,6 +148,7 @@ pub fn collect(
     dirty: bool,
     max_depth: u32,
     tile_size: u32,
+    hardware: Hardware,
 ) -> anyhow::Result<Env> {
     let mut scene_hashes = BTreeMap::new();
 
@@ -175,5 +175,6 @@ pub fn collect(
         driver: "rt-bench",
         max_depth,
         tile_size,
+        hardware,
     })
 }

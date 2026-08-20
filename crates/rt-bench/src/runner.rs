@@ -17,6 +17,7 @@ use rt_scene::Scene;
 
 use crate::env;
 use crate::manifest::{Benchmark, WorkloadKind};
+use crate::hardware::Hardware;
 use crate::reference::{self, Reference};
 use crate::report::{self, Record, Stats, TileSummary, stats};
 
@@ -31,6 +32,7 @@ pub struct RunOptions {
     pub allow_dirty: bool,
     /// Directorio con las referencias EXR. Sin esto no se calcula MSE.
     pub reference_dir: Option<PathBuf>,
+    pub hardware: Hardware,
 }
 
 struct Timing {
@@ -169,10 +171,17 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| if dirty { "workdir".to_string() } else { commit.sha[..12].to_string() });
 
-    let environment = env::collect(benches, dirty, opts.max_depth, opts.tile_size)?;
+    let environment = env::collect(
+        benches,
+        dirty,
+        opts.max_depth,
+        opts.tile_size,
+        opts.hardware.clone(),
+    )?;
 
     println!(
-        "config={}  reps={}  cooldown={}s  max_depth={}  tile_size={}  label={label}",
+        "hardware={}  config={}  reps={}  cooldown={}s  max_depth={}  tile_size={}  label={label}",
+        opts.hardware.id,
         opts.kind.as_str(),
         opts.reps,
         opts.cooldown.as_secs(),
@@ -239,6 +248,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 width: workload.width,
                 height: bench.height(workload.width),
                 spp: workload.spp,
+                hardware: opts.hardware.id.clone(),
                 commit: commit.sha[..12].to_string(),
                 commit_label: label.clone(),
                 commit_subject: commit.subject.clone(),

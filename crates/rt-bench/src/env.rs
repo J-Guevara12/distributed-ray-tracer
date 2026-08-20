@@ -135,7 +135,7 @@ pub fn image_sha(buf: &[Vec4]) -> String {
     hex16(&hasher.finalize())
 }
 
-fn file_sha(path: &Path) -> anyhow::Result<String> {
+pub fn file_sha(path: &Path) -> anyhow::Result<String> {
     let bytes = fs::read(path).with_context(|| format!("hashing {}", path.display()))?;
     Ok(hex16(&Sha256::digest(&bytes)))
 }

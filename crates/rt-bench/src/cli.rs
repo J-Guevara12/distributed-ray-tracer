@@ -1,10 +1,10 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::bail;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::manifest::{self, Benchmark, WorkloadKind, discover_benches, parse_bench_config};
+use crate::manifest::{self, WorkloadKind, discover_benches, parse_bench_config, select};
+use crate::reference::{self, ReferenceOptions};
 use crate::runner::{self, RunOptions};
 
 #[derive(Parser)]
@@ -23,6 +23,8 @@ pub enum Commands {
     List (ListArgs),
     /// Measures the current build against the benchmark suite
     Run (RunArgs),
+    /// Creates a high accuracy copy of the current benchmark images, saves it in EXR format
+    Reference(ReferenceArgs),
 }
 
 #[derive(Args)]
@@ -62,6 +64,9 @@ pub struct RunArgs {
     /// Measure and print without writing to the history file
     #[arg(long)]
     pub no_record: bool,
+    /// Directory holding the reference EXRs. Enables MSE and efficiency.
+    #[arg(long)]
+    pub reference: Option<PathBuf>,
     #[arg(long)]
     pub allow_dirty: bool,
 }
@@ -79,6 +84,37 @@ pub struct ListArgs {
     #[arg(long)]
     #[arg(default_value_t=Format::Text)]
     pub format: Format
+}
+#[derive(Args)]
+pub struct ReferenceArgs {
+    #[arg(default_value_t="./scenes/bench".to_string())]
+    #[arg(short, long)]
+    pub base_dir: String,
+    #[arg(default_value_t="bench.toml".to_string())]
+    #[arg(short, long)]
+    pub file_name: String,
+    /// Measure only these benchmarks, by id or name: --only B1 B2 / --only B1,B2
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub only: Vec<String>,
+    /// Which workload's resolution to render. The reference is tied to the
+    /// width, so `quick` and `full` need separate files when they differ.
+    #[arg(long, value_enum, default_value_t=WorkloadKind::Full)]
+    pub config: WorkloadKind,
+    /// High on purpose: a fixed depth truncates the path and loses energy, so a
+    /// shallow reference bakes that bias in and `run` would measure it as error.
+    #[arg(long, default_value_t=100)]
+    pub max_depth: u32,
+    #[arg(long, default_value_t=32)]
+    pub tile_size: u32,
+    /// Reference noise adds to the measured MSE as a floor. Variance goes as
+    /// 1/spp, so ~100x the measured spp puts that floor at 1%. Below 50x the
+    /// command warns.
+    #[arg(long, default_value_t=16384)]
+    pub spp: u32,
+    #[arg(long, default_value_t="./bench/reference".to_string())]
+    pub out_dir: String,
+    #[arg(long)]
+    pub allow_dirty: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
@@ -122,33 +158,7 @@ impl Cli {
             Commands::Run(args) => {
                 let base_dir = Path::new(&args.base_dir);
                 let config_files = discover_benches(base_dir, &args.file_name)?;
-                let mut benches = parse_bench_config(config_files)?;
-
-                if !args.only.is_empty() {
-                    let matches = |sel: &String, b: &Benchmark| {
-                        &b.manifest.id == sel || &b.manifest.name == sel
-                    };
-
-                    let unknown: Vec<&String> = args
-                        .only
-                        .iter()
-                        .filter(|sel| !benches.iter().any(|b| matches(sel, b)))
-                        .collect();
-
-                    if !unknown.is_empty() {
-                        let available: Vec<&str> = benches
-                            .iter()
-                            .map(|b| b.manifest.id.as_str())
-                            .collect();
-                        bail!(
-                            "unknown benchmark(s): {}. available: {}",
-                            unknown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
-                            available.join(", ")
-                        );
-                    }
-
-                    benches.retain(|b| args.only.iter().any(|sel| matches(sel, b)));
-                }
+                let benches = select(parse_bench_config(config_files)?, &args.only)?;
 
                 let opts = RunOptions {
                     kind: args.config,
@@ -159,9 +169,27 @@ impl Cli {
                     tile_size: args.tile_size,
                     out: (!args.no_record).then(|| args.out.clone()),
                     allow_dirty: args.allow_dirty,
+                    reference_dir: args.reference.clone(),
                 };
 
                 runner::run(&benches, &opts)?;
+            }
+
+            Commands::Reference(args) => {
+                let base_dir = Path::new(&args.base_dir);
+                let config_files = discover_benches(base_dir, &args.file_name)?;
+                let benches = select(parse_bench_config(config_files)?, &args.only)?;
+
+                let opts = ReferenceOptions {
+                    kind: args.config,
+                    spp: args.spp,
+                    max_depth: args.max_depth,
+                    tile_size: args.tile_size,
+                    out_dir: PathBuf::from(&args.out_dir),
+                    allow_dirty: args.allow_dirty,
+                };
+
+                reference::generate(&benches, &opts)?;
             }
         }
 

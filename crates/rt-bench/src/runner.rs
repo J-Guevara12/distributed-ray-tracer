@@ -1,9 +1,12 @@
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::bail;
 use rt_core::camera::Camera;
+use rt_core::display::resolve;
+use rt_renderer::exr_io::Comparison;
 use rt_renderer::framebuffer::FrameBuffer;
 use rt_renderer::render::render_scene;
 use rt_renderer::tiles::TileResult;
@@ -14,6 +17,7 @@ use rt_scene::Scene;
 
 use crate::env;
 use crate::manifest::{Benchmark, WorkloadKind};
+use crate::reference::{self, Reference};
 use crate::report::{self, Record, Stats, TileSummary, stats};
 
 pub struct RunOptions {
@@ -25,9 +29,12 @@ pub struct RunOptions {
     pub tile_size: u32,
     pub out: Option<String>,
     pub allow_dirty: bool,
+    /// Directorio con las referencias EXR. Sin esto no se calcula MSE.
+    pub reference_dir: Option<PathBuf>,
 }
 
 struct Timing {
+    comparison: Option<Comparison>,
     build_ms: f64,
     wall_ms: u128,
     rays: u64,
@@ -60,7 +67,35 @@ impl Timing {
     }
 }
 
-fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
+fn load_references(
+    benches: &[Benchmark],
+    opts: &RunOptions,
+) -> anyhow::Result<HashMap<String, Reference>> {
+    let Some(dir) = &opts.reference_dir else {
+        return Ok(HashMap::new());
+    };
+
+    println!("\n== references ({}) ==", dir.display());
+    let mut loaded = HashMap::new();
+
+    for bench in benches {
+        let workload = bench.workload(opts.kind);
+        let width = workload.width;
+        let height = bench.height(width);
+
+        let reference =
+            reference::load(dir, bench, width, height, opts.max_depth, workload.spp)?;
+        println!(
+            "  {} {width}x{height}  {} spp, max_depth {}  ({})",
+            bench.manifest.id, reference.meta.spp, reference.meta.max_depth, reference.meta.commit
+        );
+        loaded.insert(bench.manifest.id.clone(), reference);
+    }
+
+    Ok(loaded)
+}
+
+fn measure(bench: &Benchmark, opts: &RunOptions, reference: Option<&Reference>) -> Timing {
     let workload = bench.workload(opts.kind);
 
     let mut config = bench.camera;
@@ -94,15 +129,24 @@ fn measure(bench: &Benchmark, opts: &RunOptions) -> Timing {
         &scene,
     );
 
+    let wall_ms = render_start.elapsed().as_millis();
+    let snapshot = snapshot_source.get_snapshot();
+
+    let comparison = reference.map(|reference| {
+        reference::compare(&resolve(&snapshot), reference)
+            .expect("la referencia ya fue validada al cargarla")
+    });
+
     Timing {
+        comparison,
         build_ms,
-        wall_ms: render_start.elapsed().as_millis(),
+        wall_ms,
         rays: stats.rays,
         samples: width as u64 * height as u64 * workload.spp as u64,
         node_visits: stats.traversal.node_visits,
         prim_tests: stats.traversal.prim_tests,
         tile_ms: stats.tile_ms,
-        image_hash: env::image_sha(&snapshot_source.get_snapshot()),
+        image_hash: env::image_sha(&snapshot),
     }
 }
 
@@ -139,9 +183,14 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
         println!("WARNING: dirty working tree, results are not attributable to a commit");
     }
 
+    // Antes del warmup: si una referencia está obsoleta o falta, es mejor
+    // enterarse ahora que después de veinte minutos de mediciones.
+    let references = load_references(benches, opts)?;
+    let reference_of = |bench: &Benchmark| references.get(&bench.manifest.id);
+
     println!("\n== warmup ({} runs, not recorded) ==", benches.len());
     for bench in benches {
-        let timing = measure(bench, opts);
+        let timing = measure(bench, opts, None);
         println!("  {} {} ms", bench.manifest.id, timing.wall_ms);
     }
 
@@ -159,7 +208,8 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
             std::thread::sleep(opts.cooldown);
 
             let mhz = env::cpu_mhz();
-            let timing = measure(bench, opts);
+            let reference = reference_of(bench);
+            let timing = measure(bench, opts, reference);
             let workload = bench.workload(opts.kind);
 
             println!(
@@ -173,6 +223,15 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 timing.build_ms,
                 mhz.map(|m| format!("  {m:.0} MHz")).unwrap_or_default(),
             );
+            if let Some(comparison) = &timing.comparison {
+                println!(
+                    "            mse {:.3e}  rel {:.3e}  rmse {:.3e}  efic {:.4}",
+                    comparison.mse,
+                    comparison.relative_mse,
+                    comparison.rmse,
+                    rt_renderer::exr_io::efficiency(comparison.mse, timing.secs()),
+                );
+            }
 
             records.push(Record {
                 benchmark: bench.manifest.id.clone(),
@@ -194,7 +253,13 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 node_visits: Some(timing.node_visits),
                 prim_tests: Some(timing.prim_tests),
                 image_hash: Some(timing.image_hash.clone()),
-                mse: None,
+                mse: timing.comparison.map(|c| c.mse),
+                relative_mse: timing.comparison.map(|c| c.relative_mse),
+                efficiency: timing
+                    .comparison
+                    .map(|c| rt_renderer::exr_io::efficiency(c.mse, timing.secs())),
+                reference_spp: reference.map(|r| r.meta.spp),
+                reference_max_depth: reference.map(|r| r.meta.max_depth),
                 cpu_mhz: mhz,
                 timestamp: timestamp.clone(),
                 build_ms: Some(timing.build_ms),
@@ -206,6 +271,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
 
     check_determinism(benches, &records);
     print_summary(benches, &records, opts);
+    print_quality(benches, &records);
 
     match &opts.out {
         Some(path) => {
@@ -221,6 +287,50 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
 
 /// El hash de la imagen debe ser idéntico entre repeticiones. Si no lo es,
 /// queda algo no determinista y cualquier medición fina es sospechosa.
+/// Solo se imprime si la corrida usó `--reference`. La eficiencia es la métrica
+/// que decide: un cambio que baja el tiempo subiendo el ruido no es una mejora,
+/// y el reloj por sí solo no lo distingue.
+fn print_quality(benches: &[Benchmark], records: &[Record]) {
+    if !records.iter().any(|r| r.mse.is_some()) {
+        return;
+    }
+
+    println!("\n== quality (vs reference) ==");
+    println!(
+        "  {:<5} {:>12} {:>12} {:>12} {:>10} {:>16}",
+        "ID", "mse", "rel_mse", "rmse", "eficiencia", "referencia"
+    );
+    println!("  {}", "-".repeat(72));
+
+    for bench in benches {
+        let id = &bench.manifest.id;
+        let rows: Vec<&Record> = records
+            .iter()
+            .filter(|r| &r.benchmark == id && r.mse.is_some())
+            .collect();
+        if rows.is_empty() {
+            continue;
+        }
+
+        let median = |values: Vec<f64>| stats(&values).median;
+        let mse = median(rows.iter().filter_map(|r| r.mse).collect());
+        let rel = median(rows.iter().filter_map(|r| r.relative_mse).collect());
+        let efficiency = median(rows.iter().filter_map(|r| r.efficiency).collect());
+        let spp = rows[0].reference_spp.unwrap_or(0);
+        let depth = rows[0].reference_max_depth.unwrap_or(0);
+
+        println!(
+            "  {:<5} {:>12.4e} {:>12.4e} {:>12.4e} {:>10.4} {:>16}",
+            id,
+            mse,
+            rel,
+            mse.sqrt(),
+            efficiency,
+            format!("{spp} spp / d{depth}"),
+        );
+    }
+}
+
 fn check_determinism(benches: &[Benchmark], records: &[Record]) {
     for bench in benches {
         let hashes: Vec<&str> = records

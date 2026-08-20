@@ -6,6 +6,7 @@ mod cli;
 mod env;
 mod manifest;
 mod report;
+mod reference;
 mod runner;
 
 fn main() -> ExitCode {

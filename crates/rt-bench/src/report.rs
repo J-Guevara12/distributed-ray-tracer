@@ -28,7 +28,18 @@ pub struct Record {
     pub node_visits: Option<u64>,
     pub prim_tests: Option<u64>,
     pub image_hash: Option<String>,
+    /// Error contra la imagen de referencia, en espacio lineal. `None` si la
+    /// corrida no usó `--reference`.
     pub mse: Option<f64>,
+    /// MSE dividido por la referencia. El plano lo domina la región brillante.
+    pub relative_mse: Option<f64>,
+    /// `1 / (mse × segundos)`. La única métrica que decide si un cambio que
+    /// baja el tiempo a costa de ruido es realmente una mejora.
+    pub efficiency: Option<f64>,
+    /// spp y profundidad con que se generó la referencia, para poder auditar el
+    /// piso de ruido del MSE sin abrir el sidecar.
+    pub reference_spp: Option<u32>,
+    pub reference_max_depth: Option<u32>,
     pub cpu_mhz: Option<f64>,
     pub timestamp: String,
     pub build_ms: Option<f64>,

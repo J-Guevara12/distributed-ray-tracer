@@ -171,6 +171,34 @@ impl Benchmark {
     }
 }
 
+/// Filtra por id o nombre. Falla listando lo disponible en vez de devolver una
+/// lista vacía en silencio, que se ve igual que "no hay benchmarks".
+pub fn select(mut benches: Vec<Benchmark>, only: &[String]) -> anyhow::Result<Vec<Benchmark>> {
+    if only.is_empty() {
+        return Ok(benches);
+    }
+
+    let matches = |sel: &String, b: &Benchmark| &b.manifest.id == sel || &b.manifest.name == sel;
+
+    let unknown: Vec<&str> = only
+        .iter()
+        .filter(|sel| !benches.iter().any(|b| matches(sel, b)))
+        .map(|s| s.as_str())
+        .collect();
+
+    if !unknown.is_empty() {
+        let available: Vec<&str> = benches.iter().map(|b| b.manifest.id.as_str()).collect();
+        bail!(
+            "unknown benchmark(s): {}. available: {}",
+            unknown.join(", "),
+            available.join(", ")
+        );
+    }
+
+    benches.retain(|b| only.iter().any(|sel| matches(sel, b)));
+    Ok(benches)
+}
+
 pub fn discover_benches(base_dir: &Path, file_name: &str) -> anyhow::Result<Vec<PathBuf>> {
     if !base_dir.exists() {
         bail!("Benchmark directory does not exist: {}", base_dir.display());

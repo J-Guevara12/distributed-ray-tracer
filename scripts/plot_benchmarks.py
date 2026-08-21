@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-B1 y B2 sobre los mismos ejes, normalizados contra el primer commit.
+B1 and B2 on shared axes, normalised against the first commit.
 
-`plot_evolution.py` grafica milisegundos, y en ms las dos escenas no se pueden
-comparar: B2 arranca en 11 s y B1 en 0.66 s. Normalizando a "veces más rápido
-que el primer commit" quedan en la misma escala y se ve QUÉ optimización sirvió
-para CUÁL escena, que es donde están los hallazgos: el BVH multiplicó por 3 a B2
-y dejó a B1 peor que antes, y la ruleta rusa hizo lo contrario.
+`plot_evolution.py` plots milliseconds, and in ms the two scenes cannot be
+compared: B2 starts at 11 s and B1 at 0.66 s. Normalising to "times faster than
+the first commit" puts them on one scale and shows WHICH optimisation helped
+WHICH scene, which is where the findings are: the BVH tripled B2 and left B1
+worse than before, and Russian roulette did the opposite.
 
-Imprime la ruta del PNG por stdout; las notas van por stderr.
+Prints the PNG path to stdout; notes go to stderr.
 
     python3 scripts/plot_benchmarks.py --hardware gen1 | xargs kitten icat
 """
@@ -53,7 +53,7 @@ def load(hardware):
 
 
 def series(rows, config, bench):
-    """Mediana por commit, en orden cronológico de commit."""
+    """Median per commit, in chronological commit order."""
     by_commit = defaultdict(list)
     meta = {}
     for r in rows:
@@ -114,8 +114,8 @@ def main():
             if args.absolute:
                 y, lo, hi = median, low, high
             else:
-                # Aceleración contra el primer commit: invertida, porque menos
-                # tiempo es mejor y una curva que sube se lee sola.
+                # Speedup against the first commit, inverted: less time is better
+                # and a rising curve reads on its own.
                 base = median[0]
                 y = [base / m for m in median]
                 lo = [base / h for h in high]

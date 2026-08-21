@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-La evolución por commit, con una serie por generación de hardware.
+Per-commit evolution with one series per hardware generation.
 
-Igual que `plot_evolution.py` pero superponiendo las generaciones en los mismos
-ejes, para ver el corte directamente: dos curvas paralelas significan un
-multiplicador uniforme, y entonces los cocientes medidos dentro de una
-generación siguen valiendo del otro lado. Curvas que se cruzan o se separan
-significan que el corte cambió el ranking y ninguna comparación cruzada sirve.
+Same as `plot_evolution.py` but overlaying the generations on shared axes, to
+read the cut directly: parallel curves mean a uniform multiplier, and then ratios
+measured inside one generation still hold across it. Curves that cross or diverge
+mean the cut changed the ranking and no cross-generation comparison is valid.
 
-El eje x va por hash de commit, no por etiqueta: las etiquetas son texto libre y
-el mismo commit se midió con nombres distintos en corridas distintas.
+The x axis keys on commit hash, not label: labels are free text and the same
+commit was measured under different names in different runs.
 
-Imprime la ruta del PNG por stdout; la tabla de cocientes va por stderr.
+Prints the PNG path to stdout; the ratio table goes to stderr.
 
     python3 scripts/plot_hardware.py | xargs kitten icat
 """
@@ -73,8 +72,8 @@ def load():
 
 
 def dominant_workload(rows):
-    """Por panel, la carga con más commits distintos. Una escena medida a dos
-    resoluciones distintas no es una serie, son dos."""
+    """Per panel, the workload with the most distinct commits. One scene measured
+    at two resolutions is not one series, it is two."""
     counts = defaultdict(Counter)
     for r in rows:
         counts[(r["config"], r["benchmark"])][r["workload"]] += 1
@@ -82,8 +81,8 @@ def dominant_workload(rows):
 
 
 def commit_axis(rows):
-    """Orden cronológico de commit. La etiqueta la aporta la medición más
-    reciente, porque las nuevas son las que tienen nombres útiles."""
+    """Chronological commit order. The label comes from the most recent
+    measurement, since the newer runs are the ones with useful names."""
     date, label, newest = {}, {}, {}
     for r in rows:
         date[r["commit"]] = r["date"]
@@ -95,8 +94,8 @@ def commit_axis(rows):
 
 
 def series(rows, generation, commits):
-    """Mediana, min y max por commit. `None` donde esa generación no lo midió,
-    para que la línea se corte en vez de interpolar sobre un hueco."""
+    """Median, min and max per commit. `None` where that generation did not
+    measure it, so the line breaks instead of interpolating over a gap."""
     samples = defaultdict(list)
     for r in rows:
         if r["hardware"] == generation:
@@ -109,8 +108,8 @@ def series(rows, generation, commits):
 
 
 def ratios(rows, generations, commits, labels):
-    """Cociente por commit contra la generación más reciente, donde las dos lo
-    midieron. Es el número que dice si el corte es uniforme."""
+    """Per-commit ratio against the newest generation, where both measured it.
+    This is the number that says whether the cut is uniform."""
     if len(generations) < 2:
         return
 

@@ -50,11 +50,15 @@ fn test_metal_fuzzy_absorption_edge_case() {
         material: 0,
     };
 
-    // Debido a la alta rugosidad, probabilísticamente muchas muestras intentarán rebotar
-    // por debajo de la normal (Y < 0). Hacemos un bucle para cazar ese caso.
+    // Con fuzz alto, muchas muestras apuntan por debajo de la normal (Y < 0) y
+    // el rayo se absorbe. El RNG va FUERA del bucle: sembrándolo adentro las
+    // 100 vueltas repetían la misma muestra, así que el test pasaba o fallaba
+    // según qué devolviera la semilla 0 — y dejó de pasar al cambiar
+    // `random_unit_vector` a la versión analítica.
+    let mut rng = fastrand::Rng::with_seed(0);
     let mut absorbido = false;
     for _ in 0..100 {
-        if metal_rugoso.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).is_none() {
+        if metal_rugoso.scatter(&ray_in, &rec, &mut rng).is_none() {
             absorbido = true;
             break;
         }

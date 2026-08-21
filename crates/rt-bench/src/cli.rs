@@ -5,7 +5,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::build;
 use crate::hardware;
-use crate::manifest::{self, WorkloadKind, discover_benches, parse_bench_config, select};
+use crate::manifest::{self, Tracer, WorkloadKind, discover_benches, parse_bench_config, select};
 use crate::reference::{self, ReferenceOptions};
 use crate::runner::{self, RunOptions};
 
@@ -84,6 +84,11 @@ pub struct RunArgs {
     pub build: bool,
     #[arg(long)]
     pub allow_dirty: bool,
+    /// Describes the tipe of tracer to use:
+    /// Normal: Traces a normal map, no bounces
+    /// Path: Traces a full ray with bounces and all the optic properties implemented
+    #[arg(long, value_enum, default_value_t=Tracer::Path)]
+    pub tracer: Tracer,
 }
 #[derive(Args)]
 pub struct ListArgs {
@@ -200,6 +205,7 @@ impl Cli {
                     out: (!args.no_record).then(|| args.out.clone()),
                     allow_dirty: args.allow_dirty,
                     reference_dir: args.reference.clone(),
+                    tracer: args.tracer,
                     hardware,
                 };
 

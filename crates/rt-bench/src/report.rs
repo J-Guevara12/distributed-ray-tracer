@@ -46,6 +46,7 @@ pub struct Record {
     pub build_ms: Option<f64>,
     pub tiles: Option<TileSummary>,
     pub env: Env,
+    pub tracer: String,
 }
 
 #[derive(Serialize, Clone)]

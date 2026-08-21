@@ -10,19 +10,19 @@ use rt_renderer::exr_io::Comparison;
 use rt_renderer::framebuffer::FrameBuffer;
 use rt_renderer::render::render_scene;
 use rt_renderer::tiles::TileResult;
-use rt_renderer::tracers::PathTracer;
 use rt_scene::bvh::Bvh;
 use rt_scene::hittable_list::SceneData;
 use rt_scene::Scene;
 
 use crate::env;
-use crate::manifest::{Benchmark, WorkloadKind};
+use crate::manifest::{Benchmark, Tracer, WorkloadKind};
 use crate::hardware::Hardware;
 use crate::reference::{self, Reference};
 use crate::report::{self, Record, Stats, TileSummary, stats};
 
 pub struct RunOptions {
     pub kind: WorkloadKind,
+    pub tracer: Tracer,
     pub reps: usize,
     pub cooldown: Duration,
     pub label: Option<String>,
@@ -118,13 +118,13 @@ fn measure(bench: &Benchmark, opts: &RunOptions, reference: Option<&Reference>) 
 
     let framebuffer = Arc::new(FrameBuffer::new(width, height));
     let snapshot_source = Arc::clone(&framebuffer);
-    let tracer = Arc::new(PathTracer::new(opts.max_depth));
+    let tracer = opts.tracer.build(opts.max_depth);
     let on_tile = |_: &TileResult| {};
 
     let render_start = Instant::now();
     let stats = render_scene(
         Arc::new(camera),
-        tracer,
+        tracer.into(),
         framebuffer,
         &on_tile,
         opts.tile_size,
@@ -275,6 +275,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 build_ms: Some(timing.build_ms),
                 tiles: TileSummary::new(&timing.tile_ms),
                 env: environment.clone(),
+                tracer: opts.tracer.as_str().to_string(),
             });
         }
     }

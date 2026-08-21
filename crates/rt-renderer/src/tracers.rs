@@ -19,6 +19,20 @@ pub trait RayTracer: Send + Sync + 'static {
     ) -> Color;
 }
 
+pub enum AnyTracer {
+    Normal(NormalTracer),
+    Path(PathTracer),
+}
+
+impl RayTracer for AnyTracer {
+    fn trace_ray(&self, ray: Ray, scene: &Scene, context: &mut RayContext) -> Color {
+        match self {
+            AnyTracer::Normal(tracer) => tracer.trace_ray(ray, scene, context),
+            AnyTracer::Path(tracer) => tracer.trace_ray(ray, scene, context),
+        }
+    }
+}
+
 pub struct NormalTracer {}
 
 impl RayTracer for NormalTracer {

@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 use anyhow::{Context, bail};
 use rt_core::camera::CameraConfig;
 use rt_core::dto::ScenePayload;
+use rt_renderer::tracers::{AnyTracer, NormalTracer, PathTracer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -32,6 +33,28 @@ pub struct Benchmark {
 pub struct Workload {
     pub width: u32,
     pub spp: u32,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, clap::ValueEnum)]
+pub enum Tracer {
+    Normal,
+    Path,
+}
+
+impl Tracer {
+    pub fn build(self, max_depth: u32) -> AnyTracer {
+        match self {
+            Tracer::Normal => AnyTracer::Normal(NormalTracer {}),
+            Tracer::Path => AnyTracer::Path(PathTracer::new(max_depth)),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Tracer::Normal => "normal",
+            Tracer::Path => "path",
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, clap::ValueEnum)]

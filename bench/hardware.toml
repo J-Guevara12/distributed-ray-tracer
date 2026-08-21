@@ -12,9 +12,15 @@ description = "i7-14700HX, 24 threads, Linux VM on a Windows host"
 note = """
 Host power saving was on, and the guest cannot see it: /proc does not expose the
 real frequency, so cpu_mhz is null in every one of these records and the
-throttling guard was blind. Measured 1.40x slower than gen1 on the same code.
-Ratios within a single run stay valid; absolutes and comparisons against gen1 do
-not. Covers everything up to 2026-08-19.
+throttling guard was blind. Covers everything up to 2026-08-19.
+
+The penalty is not one number. Measured against gen1 on the same commits
+(scripts/plot_hardware.py): 1.42x on B1 quick and 1.32x on B2 quick, but only
+1.17x and 1.15x on full. Power saving caps the boost clock, which is what short
+bursts run on; a full run is already at its thermally sustained frequency where
+the power plan barely matters. Spread inside each panel is 2-6%, so ratios
+measured within one interleaved run stay valid across the cut. Absolutes need
+the factor for their own config, not a global one.
 """
 
 [gen1]

@@ -56,6 +56,34 @@ pesa relativamente menos.
 `quick` sirve para detectar la dirección del cambio, no para predecir su
 magnitud en `full`.
 
+### El reloj miente cuando el cambio negocia ruido por tiempo
+
+La ruleta rusa dejó B2 un 10% más rápido y **26% peor**. Las dos cosas son
+ciertas: hace menos trabajo y produce una imagen proporcionalmente más ruidosa
+que lo que ahorró. El cronómetro solo ve la mitad.
+
+La métrica es `eficiencia = 1 / (MSE × segundos)`, medida contra una imagen de
+referencia convergida. Un cambio que parte el tiempo y duplica el error es un
+empate, y esa fórmula lo dice.
+
+Desde F0.9 **ningún cambio de muestreo o de terminación se puede evaluar con el
+reloj.** Vale para la ruleta rusa, para los muestreadores de F1.5, para NEE y
+para el clamping de fireflies de F1.9.
+
+### La eficiencia no depende del spp, y eso la vuelve la métrica correcta
+
+Medido en las dos escenas, antes y después de la ruleta: `MSE ∝ 1/spp` con
+error menor al 3% en los cuatro casos (B1 25.18 contra 25.00 esperado, B2 12.59
+contra 12.50). Como el tiempo va como `spp`, el producto es constante y la
+eficiencia sale igual en `quick` que en `full` (desvío 1.4–11%).
+
+Consecuencia práctica: **se puede medir eficiencia en `quick` y el número vale
+para `full`**, que es lo contrario de lo que pasa con el tiempo de pared.
+
+Y el chequeo es gratis: si la MSE deja de escalar como `1/spp`, hay sesgo. Es la
+forma de detectar que una referencia quedó obsoleta o que el integrador dejó de
+ser insesgado.
+
 ### Una métrica mal definida apunta al revés
 
 `TileSummary::imbalance` es `(max - media) / media`: cuánto se despega el peor
@@ -145,6 +173,42 @@ mesa un scheduler capaz de partir tiles a demanda — insumo para F5.4.
 16 y 32 empatan dentro del ruido. Entre empatados gana el mayor: `write_tile`
 toma un write-lock sobre el framebuffer entero, así que menos tiles es menos
 contención.
+
+### La ruleta rusa depende de la escena, y el throughput no alcanza para decidir
+
+B1 ×1.58 de eficiencia, B2 ×0.75. La misma optimización, resultados opuestos.
+
+La ruleta decide con el throughput acumulado, que es un proxy de la contribución
+que falta. El proxy falla cuando lo que viene adelante es una fuente **grande y
+garantizada**:
+
+* **B2, cielo abierto**: contribución restante grande y de baja varianza — el
+  camino *siempre* encuentra el cielo. Matarlo pierde algo seguro.
+* **B1, caja cerrada**: contribución restante chica y de alta varianza — la luz
+  es un quad diminuto que el camino casi nunca encuentra. Matarlo es gratis.
+
+Con `MIN_BOUNCES` de 3 a 5 se recupera parte (B2 sube a ×0.91, B1 baja a ×1.40;
+media geométrica ×1.13 contra ×1.09), pero es un compromiso, no una solución: en
+B2 la MSE sigue subiendo más de lo que baja el tiempo. La respuesta de fondo es
+NEE, que muestrea la luz directamente en vez de esperar a chocarla.
+
+Corolario para más adelante: **la ruleta vale más en escenas cerradas y oscuras
+que en abiertas y brillantes.** Los interiores de F2.1 (Sponza, San Miguel) son
+el caso favorable; B2 es el adverso, no el típico.
+
+### `max_depth` solo importa donde la varianza ya bajó
+
+Subirlo de 15 a 64 con la ruleta puesta no cambió nada medible: mismo tiempo,
+misma eficiencia, `ray/smp` 3.49 contra 3.54. Con la ruleta el tope nunca aplica.
+
+La razón es aritmética. Truncar en 15 con albedo ~0.73 deja un sesgo de
+`(0.73¹⁵)² ≈ 7.6e-5`, y la MSE por varianza a 8 spp es `8.3e-2`: **tres órdenes
+de magnitud abajo, invisible.** A 25000 spp la varianza cae a ~2.7e-5 y el sesgo
+pasa a ser comparable.
+
+O sea que la profundidad alta hace falta **en la referencia, no en los
+benchmarks**. En los benchmarks es red de seguridad contra caminos patológicos
+(reflexión interna total en un dieléctrico), no una mejora medible.
 
 ### Contadores atómicos en el bucle caliente cuestan 30–40×
 

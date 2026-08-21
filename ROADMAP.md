@@ -33,16 +33,22 @@ uno al 100% sin él.
 | | Actividad | Estado |
 |---|---|---|
 | F0.1 | Perfil de release + `target-cpu` | ✅ |
-| F0.2 | Framebuffer HDR + transform de display separada | ✅ |
+| F0.2 | Framebuffer HDR + transform de display separada + export EXR | ✅ |
 | F0.3a | `rt-bench`: crate, manifiesto, wall time, metadata, JSONL | ✅ |
 | F0.3b | `RayStats`, rayos/s, samples/s, histograma por tile | ✅ |
-| F0.7 (parcial) | Arreglo del eje `0..2` → `0..3` (`cf36400`) | ✅ |
-| — | Barrida histórica (`bench_sweep.py`), 6 commits × 2 escenas | ✅ |
-| — | Suite B1 + B2 congelada | ✅ |
-| — | Baselines `quick` y `full` en `bench/history.jsonl` | ✅ |
-| — | Tests reparados y estables (43) | ✅ |
+| F0.3c | `rt-bench reference` (EXR a 25k spp / `d100`), MSE y eficiencia | ✅ |
+| F0.4 | Determinismo por (píxel, sample) + test de regresión | ✅ |
+| F0.5 | Manejo de errores, `parking_lot` | ✅ |
+| F0.6 | `Material` y primitivas a enums, material por índice | ✅ |
+| F0.7 | BVH: eje de mayor extensión, sin duplicados, front-to-back | ✅ |
+| F0.8 | BVH plano + `Aabb{min,max}` + slab SIMD + `node_visits`/`prim_tests` | ✅ |
+| F0.9 | Ruleta rusa, `tile_size` 32, `max_depth` 64, fix de `emitted` | ✅ parcial |
+| — | Barrida histórica: 19 commits × 2 escenas × 2 configs | ✅ |
+| — | Generaciones de hardware (`bench/hardware.toml`) + guarda de binario obsoleto | ✅ |
+| — | Suite B1 + B2 congelada, baselines en `bench/history.jsonl` | ✅ |
+| — | Tests estables (56, 1 ignorado) | ✅ |
 
-Todo lo demás, pendiente.
+Pendiente de F0.9: `random_unit_vector` analítico. De ahí, F0.10 en adelante.
 
 ---
 
@@ -76,6 +82,14 @@ nodo. Mejor codegen no ayuda a un bucle que espera la caché.
 **Consecuencia:** el BVH plano con primitivas contiguas (originalmente F2.3) sube
 de prioridad por encima del slab test SIMD, que podría decepcionar por la misma
 razón.
+
+**Confirmado en parte.** El BVH plano dio ×1.51 en B1 y ×1.57 en B2, lo previsto.
+Pero el slab SIMD **no decepcionó**: ×1.07 y ×1.11, cuando la estimación era
+0–7% con la evidencia apuntando al piso. El desensamblado explica por qué la
+estimación quedó corta: LLVM ya había vuelto branchless el swap de signo con
+`cmpltss`+`blendvps`, así que no había ramas que ganar — pero la aritmética
+seguía siendo escalar (`vsubss`/`vmulss`), y vectorizarla rindió más de lo
+proyectado.
 
 Evidencia de apoyo: en B1 (19 objetos) el BVH **cuesta ~7%** contra un barrido
 lineal — `pre-bvh [21.8, 22.8, 22.5]` vs `bvh [23.7, 24.2, 25.2]`, sin solaparse.
@@ -158,13 +172,13 @@ Los números son **identidad**, no orden. El orden de ejecución está en §6.
 | F0.2 ✅ | Framebuffer `Vec<Vec4>` lineal; tone mapping como etapa de lectura; export EXR |
 | F0.3a ✅ | `rt-bench`: manifiesto, wall time, metadata, salida JSONL |
 | F0.3b ✅ | `RayStats` por `&mut`, rayos/s, samples/s, resumen de tiles |
-| F0.3c ✅ | `--reference` (render a ~100k spp → EXR), MSE en espacio lineal. **No antes de F1** |
+| F0.3c ✅ | `rt-bench reference` a 25k spp / `max_depth` 100 → EXR, más `--reference` en `run`: MSE, MSE relativo y eficiencia `1/(MSE·s)` en espacio lineal. Adelantado respecto al plan porque F0.9 no era medible sin él |
 | F0.4 ✅ | Determinismo: RNG sembrado por (píxel, sample, rebote); misma imagen con 1 hilo y con 24; test de regresión con hash |
 | F0.5 ✅ | `thiserror` en librerías, `anyhow` en binarios; eliminar `unwrap`/`expect` de rutas no-inicialización |
 | F0.6 ✅ | `Material` y `Hittable` de `dyn` a enums. Justificación medible, no estética |
 | F0.7 ✅ | **BVH**: split por eje de mayor extensión (elimina `fastrand`), quitar el duplicado de `span==1`, orden de recorrido front-to-back |
 | F0.8 ✅ | `Aabb{min,max: Vec3A}`, `inv_dir` precomputado en `Ray`, slab test SIMD, `Ray` por referencia. **+ BVH plano** (`Vec<FlatNode>` con índices `u32`, hojas multi-primitiva, primitivas contiguas) |
-| F0.9 | Ruleta rusa + corte por atenuación; `tile_size` 32; RNG por tile (sin TLS); `random_unit_vector` analítico; fix de `emitted(normal[0], normal[0], …)` |
+| F0.9 (parcial) | ✅ Ruleta rusa (`MIN_BOUNCES`, techo del clamp en 1.0); ✅ `tile_size` 32 y `max_depth` 64 como defaults; ✅ fix de `emitted(…)` → `(0.0, 0.0, rec.p)` hasta que F2.7 traiga UVs. **Pendiente**: `random_unit_vector` analítico. **Descartados**: corte por atenuación (la ruleta hace lo mismo sin sesgo; quedó como el piso `0.05` del clamp) y RNG por tile (F0.4 ya lo dejó por (píxel, sample); volver atrás rompería el determinismo) |
 | F0.10 | Preview rápido: baja resolución con `NormalTracer` a 1 spp |
 | F0.11 | White furnace test: esfera lambertiana albedo 1.0 en ambiente uniforme debe desaparecer. Automatizado |
 | F0.12 | Roofline: intensidad aritmética medida vs pico de máquina |
@@ -286,16 +300,22 @@ cables con requisitos opuestos.
 
 El orden cambió respecto al plan original por la evidencia de §3.
 
-1. **F0.7** — split por eje más largo. Elimina el `fastrand` del BVH, que hoy es el
-   piso de ruido de todas las mediciones. Sin esto, F0.6/F0.8/F0.9 no son medibles.
-2. Confirmar que la dispersión cae. Si no, aplicar la escalera de §3.4.
-3. **F0.8** — BVH plano + `inv_dir` + slab SIMD. La apuesta grande según §3.2.
-4. **F0.9** — ruleta rusa, `tile_size` 32, RNG por tile.
-5. **F0.4** — determinismo (la mitad se resuelve sola con F0.7).
-6. **F0.6** — enums.
-7. F0.11, F0.12, F0.13, F0.14, F0.5.
-8. **F0.3c** cuando arranque F1.
-9. Fases 1 → 2 → 3 (hito de la mesa) → 4 → 5 → 6.
+Ejecutado, en este orden: **F0.7** (elimina el `fastrand` del BVH, que era el piso
+de ruido de todas las mediciones), **F0.4**, **F0.5**, **F0.6**, **F0.8** (la
+apuesta grande de §3.2: ×1.51 en B1 y ×1.57 en B2), **F0.3c** — adelantado
+respecto al plan, porque sin referencia y MSE la ruleta rusa de F0.9 no era
+medible — y **F0.9** menos el `random_unit_vector` analítico.
+
+Lo que sigue:
+
+1. **F0.9** — cerrar con el `random_unit_vector` analítico. No es por velocidad:
+   F1.5 necesita un mapa biyectivo de `[0,1)²` a la esfera, y un muestreo por
+   rechazo destruye una secuencia de baja discrepancia.
+2. **F0.10** — preview rápido.
+3. F0.11, F0.12, F0.13, F0.14.
+4. Fases 1 → 2 → 3 (hito de la mesa) → 4 → 5 → 6.
+
+La métrica de acá en adelante es la eficiencia de §10, no el reloj.
 
 ---
 
@@ -371,7 +391,8 @@ Agregar un benchmark es `mkdir scenes/bench/<name>/` con `bench.toml`,
 | F0.3 | rayos/s y samples/s de baseline | B1, B2 | tabla de baseline |
 | F0.4 | hash idéntico con 1 hilo y con 24 | B1, B2 | test |
 | F0.6 | Δ rayos/s | B2 | barra de contribución por optimización |
-| F0.7–F0.9 | rayos/s + **nodos visitados/rayo** | B2 | idem + calidad de árbol |
+| F0.7–F0.8 | rayos/s + **nodos visitados/rayo** | B2 | idem + calidad de árbol |
+| F0.9 | **eficiencia `1/(MSE·s)`** contra referencia. El reloj solo no sirve: la ruleta rusa dejó B2 10% más rápido y 26% peor | B1, B2 | eficiencia por commit |
 | F0.11 | furnace | furnace | validación |
 | F0.12 | intensidad aritmética vs pico | B2 | roofline |
 | **F1** | **MSE vs tiempo** (igual tiempo, no igual muestras) | **B1** | convergencia por muestreador × integrador |

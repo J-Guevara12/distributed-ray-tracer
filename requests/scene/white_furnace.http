@@ -1,0 +1,37 @@
+@baseUrl = http://127.0.1.1:3000
+
+# render
+POST {{baseUrl}}/scene
+Content-Type: application/json
+
+{
+  "background": {
+      "type": "solid",
+      "color": [ 0.1, 1.0, 1.0 ]
+  },
+  "materials": {
+    "solid": {
+      "type": "lambertian",
+      "albedo": [1.0, 1.0, 1.0]
+    }
+  },
+  "objects": [
+    {
+      "type": "sphere",
+      "center": [0.0, 0.0, -4.0],
+      "radius": 1.0,
+      "material": "solid"
+    }
+  ]
+}
+
+###
+# render
+@baseUrl = http://127.0.1.1:3000
+
+# render
+POST {{baseUrl}}/render
+Content-Type: application/json
+
+{
+}

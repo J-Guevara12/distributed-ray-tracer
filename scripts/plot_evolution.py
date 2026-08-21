@@ -29,6 +29,11 @@ OUT_DIR = REPO / "bench" / "plots"
 # tomaron con el ahorro de energía del host activo, que es lo que define gen0.
 LEGACY_HARDWARE = "gen0"
 
+# Records before the `--tracer` flag existed are all path-traced. A normals
+# render is one ray per sample, so mixing it into a timing series shows a
+# spectacular drop that is not an optimisation.
+LEGACY_TRACER = "path"
+
 LEGACY_WORKLOADS = {
     ("93f81f40190c645c", "quick"): (640, 64),
     ("80777a51f6822816", "quick"): (1920, 20),
@@ -89,6 +94,7 @@ def load():
         r["_key"] = (hashes.get("scene"), hashes.get("camera"), workload)
         r["_workload"] = workload
         r["_hardware"] = r.get("hardware") or LEGACY_HARDWARE
+        r["_tracer"] = r.get("tracer") or LEGACY_TRACER
 
     if unknown:
         for manifest, config in sorted(unknown):
@@ -185,6 +191,14 @@ def parse_args():
              "--hardware sin valores, todas.",
     )
     parser.add_argument(
+        "--tracer",
+        default="path",
+        choices=["path", "normal", "all"],
+        help="qué tracer graficar. 'normal' traza un rayo por muestra, así que "
+             "mezclarlo con 'path' inventa una caída que no es una optimización "
+             "(default: path)",
+    )
+    parser.add_argument(
         "-b",
         "--back",
         type=int,
@@ -227,6 +241,13 @@ def filter_hardware(rows, selection):
 def main():
     args = parse_args()
     rows = load()
+
+    if args.tracer != "all":
+        dropped = [r for r in rows if r["_tracer"] != args.tracer]
+        rows = [r for r in rows if r["_tracer"] == args.tracer]
+        if dropped:
+            print(f"aviso: {len(dropped)} registros de otro tracer excluidos "
+                  f"(--tracer all para incluirlos)", file=sys.stderr)
 
     rows, hardware = filter_hardware(rows, args.hardware)
     if not rows:

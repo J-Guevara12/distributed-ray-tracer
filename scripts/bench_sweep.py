@@ -165,6 +165,9 @@ class Result:
     # would be indistinguishable from the old ones, which were taken with host
     # power saving on.
     hardware: str
+    # `standalone` is always a path tracer; written explicitly so the schema
+    # matches rt-bench and the plotting scripts do not have to guess.
+    tracer: str
     commit: str
     commit_label: str
     commit_subject: str
@@ -493,6 +496,7 @@ def main() -> int:
                 width=bench[args.config]["width"],
                 spp=bench[args.config]["spp"],
                 hardware=hardware_id,
+                tracer="path",
                 commit=full_sha[:12],
                 commit_label=label,
                 commit_subject=subject,

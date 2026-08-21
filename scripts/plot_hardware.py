@@ -33,6 +33,12 @@ HISTORY = REPO / "bench" / "history.jsonl"
 OUT_DIR = REPO / "bench" / "plots"
 
 LEGACY_HARDWARE = "gen0"
+
+# Records before the `--tracer` flag existed are all path-traced. A normals
+# render is one ray per sample, so mixing it into a timing series shows a
+# spectacular drop that is not an optimisation.
+LEGACY_TRACER = "path"
+
 PALETTE = ["#4878cf", "#d1495b", "#3f9950", "#e08b1f", "#8d6cab"]
 
 
@@ -54,6 +60,7 @@ def load():
 
         rows.append({
             "hardware": r.get("hardware") or LEGACY_HARDWARE,
+            "tracer": r.get("tracer") or LEGACY_TRACER,
             "commit": r["commit"][:12],
             "label": r["commit_label"],
             "date": r["commit_date"],
@@ -156,6 +163,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hardware", nargs="*", metavar="GEN",
                         help="generaciones a superponer; por defecto todas")
+    parser.add_argument("--tracer", default="path", choices=["path", "normal", "all"],
+                        help="qué tracer graficar; 'normal' traza un rayo por muestra "
+                             "y mezclarlo inventa una caída (default: path)")
     parser.add_argument("--linear", action="store_true",
                         help="eje y lineal en vez de logarítmico")
     args = parser.parse_args()
@@ -163,6 +173,15 @@ def main():
     rows = load()
     if not rows:
         raise SystemExit("error: no hay registros comparables en history.jsonl")
+
+    if args.tracer != "all":
+        dropped = sum(1 for r in rows if r["tracer"] != args.tracer)
+        rows = [r for r in rows if r["tracer"] == args.tracer]
+        if dropped:
+            print(f"aviso: {dropped} registros de otro tracer excluidos "
+                  f"(--tracer all para incluirlos)", file=sys.stderr)
+        if not rows:
+            raise SystemExit(f"error: no hay registros con tracer {args.tracer}")
 
     present = sorted({r["hardware"] for r in rows},
                      key=lambda g: min(r["measured"] for r in rows if r["hardware"] == g))

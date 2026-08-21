@@ -31,10 +31,16 @@ HISTORY = REPO / "bench" / "history.jsonl"
 OUT_DIR = REPO / "bench" / "plots"
 
 LEGACY_HARDWARE = "gen0"
+
+# Records before the `--tracer` flag existed are all path-traced. A normals
+# render is one ray per sample, so mixing it into a timing series shows a
+# spectacular drop that is not an optimisation.
+LEGACY_TRACER = "path"
+
 COLORS = {"B1": "#d1495b", "B2": "#4878cf"}
 
 
-def load(hardware):
+def load(hardware, tracer):
     rows = []
     for line in HISTORY.open():
         if not line.strip():
@@ -45,6 +51,8 @@ def load(hardware):
         except (json.JSONDecodeError, KeyError, TypeError):
             continue
         if (r.get("hardware") or LEGACY_HARDWARE) != hardware:
+            continue
+        if tracer != "all" and (r.get("tracer") or LEGACY_TRACER) != tracer:
             continue
         if not r.get("width") or not r.get("spp"):
             continue
@@ -75,6 +83,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hardware", default=None,
                         help="generación a graficar; por defecto la más reciente")
+    parser.add_argument("--tracer", default="path", choices=["path", "normal", "all"],
+                        help="qué tracer graficar; 'normal' traza un rayo por muestra "
+                             "y mezclarlo inventa una caída (default: path)")
     parser.add_argument("--absolute", action="store_true",
                         help="milisegundos en vez de aceleración normalizada")
     args = parser.parse_args()
@@ -94,9 +105,9 @@ def main():
         raise SystemExit(f"error: no hay registros de {hardware}. "
                          f"Presentes: {', '.join(sorted(present))}")
 
-    rows = load(hardware)
+    rows = load(hardware, args.tracer)
     if not rows:
-        raise SystemExit(f"error: {hardware} no dejó registros comparables")
+        raise SystemExit(f"error: {hardware} no dejó registros con tracer {args.tracer}")
 
     configs = sorted({r["config"] for r in rows})
     benchmarks = sorted({r["benchmark"] for r in rows})
@@ -149,7 +160,7 @@ def main():
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     kind = "tiempo absoluto" if args.absolute else "aceleración normalizada"
-    fig.suptitle(f"B1 contra B2 — {kind} — {hardware} — {stamp}", fontsize=13)
+    fig.suptitle(f"B1 contra B2 — {kind} — {hardware} / {args.tracer} — {stamp}", fontsize=13)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)

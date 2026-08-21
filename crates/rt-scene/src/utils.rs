@@ -1,20 +1,14 @@
 use fastrand::Rng;
 use rt_core::{Vec3, Color};
+use std::f32::consts::TAU;
 
 pub fn random_unit_vector(rng: &mut Rng) -> Vec3 {
-    loop {
-        let p = Vec3::new(
-            rng.f32() * 2.0 - 1.0,
-            rng.f32() * 2.0 - 1.0,
-            rng.f32() * 2.0 - 1.0,
-        );
-        
-        let len_sq = p.length_squared();
-        // Validamos el edge case de que no sea cero y caiga dentro de la esfera
-        if len_sq > 1e-8 && len_sq <= 1.0 {
-            return p / len_sq.sqrt();
-        }
-    }
+    let z = rng.f32() * 2.0 - 1.0;
+    let phi = rng.f32() * TAU;
+
+    let r = (1.0 - z * z).max(0.0).sqrt();
+
+    Vec3::new(r * phi.cos(), r * phi.sin(), z)
 }
 pub fn is_near_zero(v: &Color) -> bool {
     let s = 1e-8;

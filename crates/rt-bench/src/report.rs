@@ -11,6 +11,9 @@ use crate::env::Env;
 pub struct Record {
     pub benchmark: String,
     pub config: String,
+    /// `path` or `normal`. A normals render is one ray per sample, so its
+    /// Mray/s is a different quantity: filter on this before comparing.
+    pub tracer: String,
     pub width: u32,
     pub height: u32,
     pub spp: u32,
@@ -46,7 +49,6 @@ pub struct Record {
     pub build_ms: Option<f64>,
     pub tiles: Option<TileSummary>,
     pub env: Env,
-    pub tracer: String,
 }
 
 #[derive(Serialize, Clone)]

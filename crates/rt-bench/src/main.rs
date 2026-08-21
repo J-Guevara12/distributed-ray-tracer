@@ -7,8 +7,9 @@ mod cli;
 mod env;
 mod hardware;
 mod manifest;
-mod report;
+mod preview;
 mod reference;
+mod report;
 mod runner;
 
 fn main() -> ExitCode {

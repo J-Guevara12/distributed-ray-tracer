@@ -224,7 +224,9 @@ pub fn generate(benches: &[Benchmark], opts: &ReferenceOptions) -> anyhow::Resul
             "    {} ({:.0}s, {:.1} MB)",
             exr.display(),
             render_seconds,
-            std::fs::metadata(&exr).map(|m| m.len() as f64 / 1e6).unwrap_or(0.0)
+            std::fs::metadata(&exr)
+                .map(|m| m.len() as f64 / 1e6)
+                .unwrap_or(0.0)
         );
     }
 
@@ -312,6 +314,10 @@ pub fn load(
 
 /// Error de un render contra su referencia. Los dos en radiancia lineal.
 pub fn compare(render: &[Vec3], reference: &Reference) -> anyhow::Result<Comparison> {
-    exr_io::compare(render, &reference.pixels)
-        .with_context(|| format!("comparando contra la referencia de {}", reference.meta.benchmark))
+    exr_io::compare(render, &reference.pixels).with_context(|| {
+        format!(
+            "comparando contra la referencia de {}",
+            reference.meta.benchmark
+        )
+    })
 }

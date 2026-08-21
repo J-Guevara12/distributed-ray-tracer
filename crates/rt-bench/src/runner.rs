@@ -10,13 +10,13 @@ use rt_renderer::exr_io::Comparison;
 use rt_renderer::framebuffer::FrameBuffer;
 use rt_renderer::render::render_scene;
 use rt_renderer::tiles::TileResult;
+use rt_scene::Scene;
 use rt_scene::bvh::Bvh;
 use rt_scene::hittable_list::SceneData;
-use rt_scene::Scene;
 
 use crate::env;
-use crate::manifest::{Benchmark, Tracer, WorkloadKind};
 use crate::hardware::Hardware;
+use crate::manifest::{Benchmark, Tracer, WorkloadKind};
 use crate::reference::{self, Reference};
 use crate::report::{self, Record, Stats, TileSummary, stats};
 
@@ -53,19 +53,35 @@ impl Timing {
     }
 
     fn nodes_per_ray(&self) -> f64 {
-        if self.rays == 0 { 0.0 } else { self.node_visits as f64 / self.rays as f64 }
+        if self.rays == 0 {
+            0.0
+        } else {
+            self.node_visits as f64 / self.rays as f64
+        }
     }
 
     fn prims_per_ray(&self) -> f64 {
-        if self.rays == 0 { 0.0 } else { self.prim_tests as f64 / self.rays as f64 }
+        if self.rays == 0 {
+            0.0
+        } else {
+            self.prim_tests as f64 / self.rays as f64
+        }
     }
 
     fn rays_per_sec(&self) -> f64 {
-        if self.wall_ms == 0 { 0.0 } else { self.rays as f64 / self.secs() }
+        if self.wall_ms == 0 {
+            0.0
+        } else {
+            self.rays as f64 / self.secs()
+        }
     }
 
     fn samples_per_sec(&self) -> f64 {
-        if self.wall_ms == 0 { 0.0 } else { self.samples as f64 / self.secs() }
+        if self.wall_ms == 0 {
+            0.0
+        } else {
+            self.samples as f64 / self.secs()
+        }
     }
 }
 
@@ -77,6 +93,16 @@ fn load_references(
         return Ok(HashMap::new());
     };
 
+    // A normals image has nothing to do with the converged render, so the MSE
+    // would come out huge and shaped like a valid number.
+    if opts.tracer != Tracer::Path {
+        bail!(
+            "--reference only makes sense with --tracer path; \
+             comparing a {} render against the reference would report a meaningless MSE",
+            opts.tracer.as_str()
+        );
+    }
+
     println!("\n== references ({}) ==", dir.display());
     let mut loaded = HashMap::new();
 
@@ -85,8 +111,7 @@ fn load_references(
         let width = workload.width;
         let height = bench.height(width);
 
-        let reference =
-            reference::load(dir, bench, width, height, opts.max_depth, workload.spp)?;
+        let reference = reference::load(dir, bench, width, height, opts.max_depth, workload.spp)?;
         println!(
             "  {} {width}x{height}  {} spp, max_depth {}  ({})",
             bench.manifest.id, reference.meta.spp, reference.meta.max_depth, reference.meta.commit
@@ -166,10 +191,13 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
     }
 
     let commit = env::head_commit()?;
-    let label = opts
-        .label
-        .clone()
-        .unwrap_or_else(|| if dirty { "workdir".to_string() } else { commit.sha[..12].to_string() });
+    let label = opts.label.clone().unwrap_or_else(|| {
+        if dirty {
+            "workdir".to_string()
+        } else {
+            commit.sha[..12].to_string()
+        }
+    });
 
     let environment = env::collect(
         benches,
@@ -350,7 +378,9 @@ fn check_determinism(benches: &[Benchmark], records: &[Record]) {
             .filter_map(|r| r.image_hash.as_deref())
             .collect();
 
-        let Some(first) = hashes.first() else { continue };
+        let Some(first) = hashes.first() else {
+            continue;
+        };
         if hashes.iter().any(|h| h != first) {
             let mut distinct: Vec<&&str> = hashes.iter().collect();
             distinct.sort_unstable();
@@ -370,8 +400,20 @@ fn print_summary(benches: &[Benchmark], records: &[Record], opts: &RunOptions) {
     println!("\n== summary ==");
     println!(
         "  {:<5} {:<15} {:>11} {:>5} {:>10} {:>6} {:>3} {:>8} {:>8} {:>7} {:>8} {:>8} {:>6} {:>10}",
-        "ID", "name", "resolution", "spp", "render", "rsd", "n", "Mray/s", "Msmp/s", "ray/smp",
-        "nod/ray", "prim/ray", "imbal", "image"
+        "ID",
+        "name",
+        "resolution",
+        "spp",
+        "render",
+        "rsd",
+        "n",
+        "Mray/s",
+        "Msmp/s",
+        "ray/smp",
+        "nod/ray",
+        "prim/ray",
+        "imbal",
+        "image"
     );
     println!("  {}", "-".repeat(129));
 

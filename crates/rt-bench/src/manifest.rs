@@ -108,7 +108,11 @@ fn palette() -> &'static Palette {
     static PALETTE: OnceLock<Palette> = OnceLock::new();
     PALETTE.get_or_init(|| {
         let colored = std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
-        if colored { Palette::ANSI } else { Palette::PLAIN }
+        if colored {
+            Palette::ANSI
+        } else {
+            Palette::PLAIN
+        }
     })
 }
 
@@ -134,25 +138,33 @@ impl Benchmark {
 
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let original_path = path.to_path_buf();
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let content =
+            fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
 
-        let manifest = toml::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
+        let manifest =
+            toml::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
 
         let path = path.with_file_name("camera.json");
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let content =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
 
-        let camera = serde_json::de::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
+        let camera = serde_json::de::from_str(&content)
+            .with_context(|| format!("parsing {}", path.display()))?;
 
         let path = path.with_file_name("scene.json");
-        let content = fs::read_to_string(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let content =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
 
-        let scene: ScenePayload = serde_json::de::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
+        let scene: ScenePayload = serde_json::de::from_str(&content)
+            .with_context(|| format!("parsing {}", path.display()))?;
         let path = original_path;
 
-        Ok(Self{ path, manifest, camera, scene  })
+        Ok(Self {
+            path,
+            manifest,
+            camera,
+            scene,
+        })
     }
 
     pub fn print_pretty(&self, verbose: bool) {
@@ -167,21 +179,40 @@ impl Benchmark {
 
         println!(
             "  {} Quick profile:{}   {}x{}px @ {}{} spp{}",
-            p.dim, p.reset, self.manifest.quick.width, quick_height, p.green, self.manifest.quick.spp, p.reset
+            p.dim,
+            p.reset,
+            self.manifest.quick.width,
+            quick_height,
+            p.green,
+            self.manifest.quick.spp,
+            p.reset
         );
         println!(
             "  {} Full profile:{}    {}x{}px @ {}{} spp{}",
-            p.dim, p.reset, self.manifest.full.width, full_height, p.green, self.manifest.full.spp, p.reset
+            p.dim,
+            p.reset,
+            self.manifest.full.width,
+            full_height,
+            p.green,
+            self.manifest.full.spp,
+            p.reset
         );
         println!(
             "  {} No. of Objects:{}  {}{}{}",
-            p.dim, p.reset, p.purple, self.scene.objects.len(), p.reset
+            p.dim,
+            p.reset,
+            p.purple,
+            self.scene.objects.len(),
+            p.reset
         );
         println!(
             "  {} No. of Materials:{} {}{}{}",
-            p.dim, p.reset, p.purple, self.scene.materials.len(), p.reset
+            p.dim,
+            p.reset,
+            p.purple,
+            self.scene.materials.len(),
+            p.reset
         );
-
 
         if verbose && !self.manifest.notes.trim().is_empty() {
             println!("  {}Notes:{}", p.bold, p.reset);
@@ -231,8 +262,8 @@ pub fn discover_benches(base_dir: &Path, file_name: &str) -> anyhow::Result<Vec<
     }
 
     let mut files = vec![];
-    let entries = fs::read_dir(base_dir)
-        .with_context(|| format!("Listing {}", base_dir.display()))?;
+    let entries =
+        fs::read_dir(base_dir).with_context(|| format!("Listing {}", base_dir.display()))?;
 
     for entry in entries {
         let path = entry
@@ -248,11 +279,7 @@ pub fn discover_benches(base_dir: &Path, file_name: &str) -> anyhow::Result<Vec<
     }
 
     if files.is_empty() {
-        bail!(
-            "{} Not found in {}",
-            file_name,
-            base_dir.display()
-        );
+        bail!("{} Not found in {}", file_name, base_dir.display());
     }
 
     files.sort();
@@ -264,13 +291,19 @@ pub fn parse_bench_config(files: Vec<PathBuf>) -> anyhow::Result<Vec<Benchmark>>
     files.iter().map(|file| Benchmark::load(file)).collect()
 }
 
-
 pub fn print_summary_table(benches: &[Benchmark]) {
     let p = palette();
 
     println!(
         "{}{:<6} {:<20} {:<25} {:<25} {:<15} {:<15}{}",
-        p.bold, "ID", "Nombre", "Quick (W/SPP)", "Full (W/SPP)", "No. Objects", "No. Materials", p.reset
+        p.bold,
+        "ID",
+        "Nombre",
+        "Quick (W/SPP)",
+        "Full (W/SPP)",
+        "No. Objects",
+        "No. Materials",
+        p.reset
     );
     println!("{}{}{}", p.cyan, "=".repeat(109), p.reset);
 
@@ -290,7 +323,14 @@ pub fn print_summary_table(benches: &[Benchmark]) {
 
         println!(
             "{}{:<6}{} {:<20} {:<25} {:<25} {:<15} {:<15}",
-            p.bold, manifest.id, p.reset, manifest.name, quick_str, full_str, bench.scene.objects.len(), bench.scene.materials.len()
+            p.bold,
+            manifest.id,
+            p.reset,
+            manifest.name,
+            quick_str,
+            full_str,
+            bench.scene.objects.len(),
+            bench.scene.materials.len()
         );
     }
 }

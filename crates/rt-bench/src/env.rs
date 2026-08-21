@@ -105,10 +105,11 @@ pub fn cpu_mhz() -> Option<f64> {
     for entry in dir.flatten() {
         let path = entry.path().join("cpufreq/scaling_cur_freq");
         if let Ok(text) = fs::read_to_string(&path)
-            && let Ok(khz) = text.trim().parse::<f64>() {
-                sum += khz / 1000.0;
-                count += 1;
-            }
+            && let Ok(khz) = text.trim().parse::<f64>()
+        {
+            sum += khz / 1000.0;
+            count += 1;
+        }
     }
 
     (count > 0).then(|| (sum / count as f64 * 10.0).round() / 10.0)

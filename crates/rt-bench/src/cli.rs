@@ -6,27 +6,30 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use crate::build;
 use crate::hardware;
 use crate::manifest::{self, Tracer, WorkloadKind, discover_benches, parse_bench_config, select};
+use crate::preview::{self, PreviewOptions};
 use crate::reference::{self, ReferenceOptions};
 use crate::runner::{self, RunOptions};
 
 #[derive(Parser)]
-#[command(name="Raytracer benchmark tool")]
+#[command(name = "Raytracer benchmark tool")]
 #[command(version = "1.0")]
 #[command(about = "Performs and manages benchmarks on the system", long_about = None)]
 #[command(propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands
+    pub command: Commands,
 }
 
 #[derive(Subcommand)]
 pub enum Commands {
     /// Lists all the available benchmarks
-    List (ListArgs),
+    List(ListArgs),
     /// Measures the current build against the benchmark suite
-    Run (RunArgs),
+    Run(RunArgs),
     /// Creates a high accuracy copy of the current benchmark images, saves it in EXR format
     Reference(ReferenceArgs),
+    /// Renders low-resolution previews of the scenes and prints their paths
+    Preview(PreviewArgs),
 }
 
 #[derive(Args)]
@@ -43,10 +46,10 @@ pub struct RunArgs {
     /// Measure only these benchmarks, by id or name: --only B1 B2 / --only B1,B2
     #[arg(long, num_args = 1.., value_delimiter = ',')]
     pub only: Vec<String>,
-    #[arg(long, default_value_t=5)]
+    #[arg(long, default_value_t = 5)]
     pub reps: usize,
     /// Seconds between runs, to let the CPU settle
-    #[arg(long, default_value_t=20)]
+    #[arg(long, default_value_t = 20)]
     pub cooldown: u64,
     /// Defaults to the short HEAD sha, or "workdir" when the tree is dirty
     #[arg(long)]
@@ -57,13 +60,13 @@ pub struct RunArgs {
     /// so a low cap only adds truncation bias. A diffuse path reaching 64 has
     /// probability ~1e-7. `standalone` still hardcodes 15 for the historical
     /// sweep; `env.max_depth` tells the two eras apart.
-    #[arg(long, default_value_t=64)]
+    #[arg(long, default_value_t = 64)]
     pub max_depth: u32,
     /// 128 until 2026-08-18. The sweep measured 32 at 98.5% parallel efficiency
     /// against 83.5% for 128: with 24 threads, 128px tiles leave the last
     /// scheduling round short. Records before the change are not comparable;
     /// `env.tile_size` tells them apart.
-    #[arg(long, default_value_t=32)]
+    #[arg(long, default_value_t = 32)]
     pub tile_size: u32,
     #[arg(long, default_value_t="./bench/history.jsonl".to_string())]
     pub out: String,
@@ -84,12 +87,42 @@ pub struct RunArgs {
     pub build: bool,
     #[arg(long)]
     pub allow_dirty: bool,
-    /// Describes the tipe of tracer to use:
-    /// Normal: Traces a normal map, no bounces
-    /// Path: Traces a full ray with bounces and all the optic properties implemented
+    /// normal: one ray per sample, normals as colour, no bounces. Isolates
+    /// traversal from the integrator, but only for coherent primary rays — the
+    /// easy case. path: the full integrator.
     #[arg(long, value_enum, default_value_t=Tracer::Path)]
     pub tracer: Tracer,
 }
+
+#[derive(Args)]
+pub struct PreviewArgs {
+    #[arg(default_value_t="./scenes/bench".to_string())]
+    #[arg(short, long)]
+    pub base_dir: String,
+    #[arg(default_value_t="bench.toml".to_string())]
+    #[arg(short, long)]
+    pub file_name: String,
+    /// Preview only these benchmarks, by id or name
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub only: Vec<String>,
+    /// Which workload's camera framing to use. Resolution and spp come from the
+    /// flags below, not from the workload.
+    #[arg(long, value_enum, default_value_t=WorkloadKind::Quick)]
+    pub config: WorkloadKind,
+    #[arg(long, value_enum, default_value_t=Tracer::Normal)]
+    pub tracer: Tracer,
+    #[arg(long, default_value_t = 400)]
+    pub width: u32,
+    #[arg(long, default_value_t = 1)]
+    pub spp: u32,
+    #[arg(long, default_value_t = 64)]
+    pub max_depth: u32,
+    #[arg(long, default_value_t = 32)]
+    pub tile_size: u32,
+    #[arg(long, default_value_t="./bench/preview".to_string())]
+    pub out_dir: String,
+}
+
 #[derive(Args)]
 pub struct ListArgs {
     #[arg(default_value_t="./scenes/bench".to_string())]
@@ -103,7 +136,7 @@ pub struct ListArgs {
     #[arg(value_enum)]
     #[arg(long)]
     #[arg(default_value_t=Format::Text)]
-    pub format: Format
+    pub format: Format,
 }
 #[derive(Args)]
 pub struct ReferenceArgs {
@@ -122,14 +155,14 @@ pub struct ReferenceArgs {
     pub config: WorkloadKind,
     /// High on purpose: a fixed depth truncates the path and loses energy, so a
     /// shallow reference bakes that bias in and `run` would measure it as error.
-    #[arg(long, default_value_t=100)]
+    #[arg(long, default_value_t = 100)]
     pub max_depth: u32,
-    #[arg(long, default_value_t=32)]
+    #[arg(long, default_value_t = 32)]
     pub tile_size: u32,
     /// Reference noise adds to the measured MSE as a floor. Variance goes as
     /// 1/spp, so ~100x the measured spp puts that floor at 1%. Below 50x the
     /// command warns.
-    #[arg(long, default_value_t=16384)]
+    #[arg(long, default_value_t = 16384)]
     pub spp: u32,
     #[arg(long, default_value_t="./bench/reference".to_string())]
     pub out_dir: String,
@@ -235,6 +268,24 @@ impl Cli {
                 };
 
                 reference::generate(&benches, &opts)?;
+            }
+
+            Commands::Preview(args) => {
+                let base_dir = Path::new(&args.base_dir);
+                let config_files = discover_benches(base_dir, &args.file_name)?;
+                let benches = select(parse_bench_config(config_files)?, &args.only)?;
+
+                let opts = PreviewOptions {
+                    kind: args.config,
+                    tracer: args.tracer,
+                    width: args.width,
+                    spp: args.spp,
+                    max_depth: args.max_depth,
+                    tile_size: args.tile_size,
+                    out_dir: PathBuf::from(&args.out_dir),
+                };
+
+                preview::generate(&benches, &opts)?;
             }
         }
 

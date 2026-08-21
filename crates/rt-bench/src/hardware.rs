@@ -62,7 +62,11 @@ pub fn load(path: &Path, override_id: Option<&str>) -> anyhow::Result<Hardware> 
         bail!(
             "{} does not define generation \"{id}\". Defined: {}",
             path.display(),
-            if known.is_empty() { "none".to_string() } else { known.join(", ") }
+            if known.is_empty() {
+                "none".to_string()
+            } else {
+                known.join(", ")
+            }
         );
     };
 

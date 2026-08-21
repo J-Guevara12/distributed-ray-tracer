@@ -8,7 +8,7 @@ pub struct RayContext {
     pub stats: RayStats,
 }
 
-const MIN_BOUNCES: u32 = 3;
+const MIN_BOUNCES: u32 = 5;
 
 pub trait RayTracer: Send + Sync + 'static {
     fn trace_ray(&self, ray: Ray, scene: &Scene, context: &mut RayContext) -> Color;

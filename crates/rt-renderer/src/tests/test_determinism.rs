@@ -27,10 +27,19 @@ fn scene() -> Scene {
     Scene {
         world: Arc::new(Bvh::build(primitives)),
         materials: vec![
-            Material::Lambertian { albedo: Color::new(0.8, 0.8, 0.0) },
-            Material::Lambertian { albedo: Color::new(0.1, 0.2, 0.5) },
-            Material::Dielectric { refraction_index: 1.5 },
-            Material::Metal { albedo: Color::new(0.8, 0.6, 0.2), fuzz: 0.3 },
+            Material::Lambertian {
+                albedo: Color::new(0.8, 0.8, 0.0),
+            },
+            Material::Lambertian {
+                albedo: Color::new(0.1, 0.2, 0.5),
+            },
+            Material::Dielectric {
+                refraction_index: 1.5,
+            },
+            Material::Metal {
+                albedo: Color::new(0.8, 0.6, 0.2),
+                fuzz: 0.3,
+            },
         ],
         background: Background::new_gradient(Color::new(0.5, 0.7, 1.0), Color::new(1.0, 1.0, 1.0)),
     }

@@ -8,6 +8,7 @@ glam = { version = "0.33", features = ["serde"] }
 crossbeam-channel = "0.5"
 fastrand = "2.4.1"
 image = { version = "0.25", features = ["png"] }
+png = "0.18"
 rayon = "1.10"
 rt-core = { version = "0.1.0", path = "../rt-core" }
 rt-scene = { version = "0.1.0", path = "../rt-scene" }

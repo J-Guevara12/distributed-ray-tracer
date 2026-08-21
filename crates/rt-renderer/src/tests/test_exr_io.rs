@@ -44,9 +44,7 @@ fn test_roundtrip_is_bit_exact() {
 #[test]
 fn test_roundtrip_preserves_row_order() {
     let (width, height) = (4u32, 3u32);
-    let pixels: Vec<Vec3> = (0..width * height)
-        .map(|i| Vec3::splat(i as f32))
-        .collect();
+    let pixels: Vec<Vec3> = (0..width * height).map(|i| Vec3::splat(i as f32)).collect();
 
     let path = scratch("order");
     exr_io::write(&path, &pixels, width, height).unwrap();
@@ -83,7 +81,11 @@ fn test_compare_computes_mse_over_channels() {
 
     let result = exr_io::compare(&render, &reference).unwrap();
 
-    assert!((result.mse - 4.0 / 3.0).abs() < 1e-12, "mse = {}", result.mse);
+    assert!(
+        (result.mse - 4.0 / 3.0).abs() < 1e-12,
+        "mse = {}",
+        result.mse
+    );
     assert!((result.max_abs - 2.0).abs() < 1e-6);
     // El relativo divide por referencia² + eps = 1 + 0.01
     assert!((result.relative_mse - (4.0 / 1.01) / 3.0).abs() < 1e-9);
@@ -101,8 +103,17 @@ fn test_compare_rejects_mismatched_sizes() {
 fn test_efficiency_treats_time_and_error_symmetrically() {
     let base = exr_io::efficiency(0.01, 10.0);
 
-    assert!((exr_io::efficiency(0.02, 5.0) - base).abs() < 1e-12, "empate no detectado");
-    assert!(exr_io::efficiency(0.01, 5.0) > base, "mitad de tiempo, mismo error");
-    assert!(exr_io::efficiency(0.02, 10.0) < base, "mismo tiempo, doble error");
+    assert!(
+        (exr_io::efficiency(0.02, 5.0) - base).abs() < 1e-12,
+        "empate no detectado"
+    );
+    assert!(
+        exr_io::efficiency(0.01, 5.0) > base,
+        "mitad de tiempo, mismo error"
+    );
+    assert!(
+        exr_io::efficiency(0.02, 10.0) < base,
+        "mismo tiempo, doble error"
+    );
     assert_eq!(exr_io::efficiency(0.0, 10.0), 0.0);
 }

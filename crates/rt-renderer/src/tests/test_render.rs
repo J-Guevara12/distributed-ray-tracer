@@ -1,8 +1,8 @@
 use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
 use crate::render::render_scene;
-use crate::tracers::RayContext;
 use crate::tiles::TileResult;
+use crate::tracers::RayContext;
 use crate::tracers::RayTracer;
 use rt_core::background::Background;
 use rt_core::{Color, Point3, Ray, Vec3, Vec4};
@@ -14,12 +14,7 @@ struct MockRayTracer {
 }
 
 impl RayTracer for MockRayTracer {
-    fn trace_ray(
-        &self,
-        _ray: Ray,
-        _scene: &Scene,
-        ctx: &mut RayContext,
-    ) -> Color {
+    fn trace_ray(&self, _ray: Ray, _scene: &Scene, ctx: &mut RayContext) -> Color {
         ctx.stats.rays += 1;
         self.fixed_color
     }

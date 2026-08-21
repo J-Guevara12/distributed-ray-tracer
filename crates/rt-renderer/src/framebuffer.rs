@@ -1,10 +1,13 @@
 use image::ImageError;
-use std::{ fs::File, io::BufWriter, path::Path, sync::{ Arc } };
 use parking_lot::RwLock;
+use std::{fs::File, io::BufWriter, path::Path, sync::Arc};
 
 use crate::exr_io;
 use crate::tiles::TileResult;
-use rt_core::{Vec4, display::{DisplayParams, resolve, to_srgb8}};
+use rt_core::{
+    Vec4,
+    display::{DisplayParams, resolve, to_srgb8},
+};
 
 pub struct FrameBuffer {
     pub width: u32,
@@ -54,7 +57,38 @@ impl FrameBuffer {
         exr_io::write(path, &resolve(&data), self.width, self.height)
     }
 
-    pub fn save_png<P: AsRef<Path>>(&self, path: P, params: &DisplayParams) -> Result<(), ImageError> {
+    /// Same as `save_png` plus PNG tEXt chunks. The provenance travels inside
+    /// the file, so a preview stays interpretable after it is moved or shared:
+    /// `exiftool` or `pnginfo` reads it back.
+    pub fn save_png_annotated<P: AsRef<Path>>(
+        &self,
+        path: P,
+        params: &DisplayParams,
+        metadata: &[(&str, String)],
+    ) -> Result<(), png::EncodingError> {
+        let data = self.data.read();
+        let pixels = to_srgb8(&resolve(&data), params);
+        let expected = (self.width * self.height * 3) as usize;
+
+        let file = File::create(path)?;
+        let mut encoder = png::Encoder::new(BufWriter::new(file), self.width, self.height);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+
+        for (key, value) in metadata {
+            encoder.add_text_chunk(key.to_string(), value.clone())?;
+        }
+
+        encoder
+            .write_header()?
+            .write_image_data(&pixels[..expected])
+    }
+
+    pub fn save_png<P: AsRef<Path>>(
+        &self,
+        path: P,
+        params: &DisplayParams,
+    ) -> Result<(), ImageError> {
         let data = self.data.read();
         let expected_size = (self.width * self.height * 3) as usize;
 

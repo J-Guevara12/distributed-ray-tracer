@@ -11,12 +11,7 @@ pub struct RayContext {
 const MIN_BOUNCES: u32 = 3;
 
 pub trait RayTracer: Send + Sync + 'static {
-    fn trace_ray(
-        &self,
-        ray: Ray,
-        scene: &Scene,
-        context: &mut RayContext,
-    ) -> Color;
+    fn trace_ray(&self, ray: Ray, scene: &Scene, context: &mut RayContext) -> Color;
 }
 
 pub enum AnyTracer {
@@ -36,12 +31,7 @@ impl RayTracer for AnyTracer {
 pub struct NormalTracer {}
 
 impl RayTracer for NormalTracer {
-    fn trace_ray(
-        &self,
-        ray: Ray,
-        scene: &Scene,
-        context: &mut RayContext,
-    ) -> Color {
+    fn trace_ray(&self, ray: Ray, scene: &Scene, context: &mut RayContext) -> Color {
         let interval = Interval::new(0.0, f32::INFINITY);
 
         context.stats.rays += 1;
@@ -71,12 +61,7 @@ impl PathTracer {
 }
 
 impl RayTracer for PathTracer {
-    fn trace_ray(
-        &self,
-        ray: Ray,
-        scene: &Scene,
-        context: &mut RayContext,
-    ) -> Color {
+    fn trace_ray(&self, ray: Ray, scene: &Scene, context: &mut RayContext) -> Color {
         let mut current_ray = ray;
 
         let mut attenuation = Color::ONE;
@@ -110,11 +95,10 @@ impl RayTracer for PathTracer {
             }
             if depth >= MIN_BOUNCES {
                 let survive = attenuation.max_element().clamp(0.05, 1.0);
-                    if context.rng.f32() >= survive {
-                        return accumulated_light
-                    }
+                if context.rng.f32() >= survive {
+                    return accumulated_light;
+                }
                 attenuation /= survive;
-
             }
         }
         accumulated_light

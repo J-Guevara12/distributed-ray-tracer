@@ -8,7 +8,11 @@ use tracing::{Level, span};
 use rt_core::{Color, Vec4};
 
 use crate::{
-    camera::Camera, framebuffer::FrameBuffer, stats::{RayStats, RenderStats}, tiles::{TileGenerator, TileResult}, tracers::{RayContext, RayTracer},
+    camera::Camera,
+    framebuffer::FrameBuffer,
+    stats::{RayStats, RenderStats},
+    tiles::{TileGenerator, TileResult},
+    tracers::{RayContext, RayTracer},
 };
 
 fn splitmix64(x: u64) -> u64 {

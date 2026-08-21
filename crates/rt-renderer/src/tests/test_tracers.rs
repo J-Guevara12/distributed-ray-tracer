@@ -51,7 +51,7 @@ impl Hittable for AlwaysHit {
     fn bounding_box(&self) -> Aabb {
         Aabb {
             min: Vec3::splat(-1.0),
-            max: Vec3::splat(1.0)
+            max: Vec3::splat(1.0),
         }
     }
 }
@@ -137,7 +137,7 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
         fn bounding_box(&self) -> Aabb {
             Aabb {
                 min: Vec3::splat(-1.0),
-                max: Vec3::splat(1.0)
+                max: Vec3::splat(1.0),
             }
         }
     }
@@ -207,5 +207,9 @@ fn test_path_tracer_miss_returns_sky_gradient() {
     );
 
     let color_down = tracer.trace_ray(Ray::new(Point3::ZERO, -Vec3::Y), &scene, &mut ctx());
-    assert_eq!(color_down, Color::ONE, "La base del cielo debería ser blanca");
+    assert_eq!(
+        color_down,
+        Color::ONE,
+        "La base del cielo debería ser blanca"
+    );
 }

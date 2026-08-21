@@ -1,4 +1,4 @@
-use crate::tiles::{TileGenerator, Tile};
+use crate::tiles::{Tile, TileGenerator};
 
 #[test]
 fn test_tile_generation_perfect_division() {
@@ -7,7 +7,7 @@ fn test_tile_generation_perfect_division() {
     let tiles: Vec<Tile> = generator.collect();
 
     assert_eq!(tiles.len(), 4, "Deberían generarse exactamente 4 tiles");
-    
+
     // Verificar que los IDs sean secuenciales
     for (i, tile) in tiles.iter().enumerate() {
         assert_eq!(tile.id, i, "El ID del tile debe ser secuencial");
@@ -23,7 +23,7 @@ fn test_tile_generation_perfect_division() {
 
 #[test]
 fn test_tile_generation_truncation_edge_cases() {
-    // Pantalla de 50x50 partida en bloques de 20x20. 
+    // Pantalla de 50x50 partida en bloques de 20x20.
     // Las dimensiones horizontales y verticales deberían truncarse a 10 en los bordes.
     let generator = TileGenerator::new(50, 50, 20);
     let tiles: Vec<Tile> = generator.collect();
@@ -37,13 +37,19 @@ fn test_tile_generation_truncation_edge_cases() {
 
     // Tercer tile (borde derecho superior): truncado en ancho
     assert_eq!(tiles[2].x, 40);
-    assert_eq!(tiles[2].width, 10, "El ancho del borde derecho debe truncarse a 10");
+    assert_eq!(
+        tiles[2].width, 10,
+        "El ancho del borde derecho debe truncarse a 10"
+    );
     assert_eq!(tiles[2].height, 20);
 
     // Séptimo tile (borde inferior izquierdo): truncado en alto
     assert_eq!(tiles[6].y, 40);
     assert_eq!(tiles[6].width, 20);
-    assert_eq!(tiles[6].height, 10, "El alto del borde inferior debe truncarse a 10");
+    assert_eq!(
+        tiles[6].height, 10,
+        "El alto del borde inferior debe truncarse a 10"
+    );
 
     // Último tile (esquina inferior derecha): truncado en ambos ejes
     assert_eq!(tiles[8].width, 10);
@@ -55,14 +61,17 @@ fn test_total_pixel_coverage() {
     let width = 801;
     let height = 601;
     let tile_size = 16;
-    
+
     let generator = TileGenerator::new(width, height, tile_size);
-    
+
     let mut total_pixels_processed = 0;
     for tile in generator {
         total_pixels_processed += tile.width * tile.height;
     }
 
-    assert_eq!(total_pixels_processed, width * height, 
-        "La suma del área de los tiles debe ser idéntica al total de píxeles de la imagen original");
+    assert_eq!(
+        total_pixels_processed,
+        width * height,
+        "La suma del área de los tiles debe ser idéntica al total de píxeles de la imagen original"
+    );
 }

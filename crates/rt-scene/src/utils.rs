@@ -1,10 +1,10 @@
-use fastrand::Rng;
-use rt_core::{Vec3, Color};
+use rt_core::{Color, Vec3, sampler::Sampler};
 use std::f32::consts::TAU;
 
-pub fn random_unit_vector(rng: &mut Rng) -> Vec3 {
-    let z = rng.f32() * 2.0 - 1.0;
-    let phi = rng.f32() * TAU;
+pub fn random_unit_vector<S: Sampler>(sampler: &mut S) -> Vec3 {
+    let u = sampler.next_2d();
+    let z = u.x * 2.0 - 1.0;
+    let phi = u.y * TAU;
 
     let r = (1.0 - z * z).max(0.0).sqrt();
 

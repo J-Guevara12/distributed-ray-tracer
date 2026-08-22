@@ -1,4 +1,4 @@
-use fastrand::Rng;
+use rt_core::sampler::Sampler;
 use rt_core::{Color, Point3, Ray};
 
 use crate::HitRecord;
@@ -13,10 +13,10 @@ pub enum Material {
 }
 
 impl Material {
-    pub fn scatter(&self, ray_in: &Ray, rec: &HitRecord, rng: &mut Rng) -> Option<(Color, Ray)> {
+    pub fn scatter<S: Sampler>(&self, ray_in: &Ray, rec: &HitRecord, sampler: &mut S) -> Option<(Color, Ray)> {
         match *self {
             Material::Lambertian { albedo } => {
-                let mut scatter_direction = rec.normal + random_unit_vector(rng);
+                let mut scatter_direction = rec.normal + random_unit_vector(sampler);
 
                 if is_near_zero(&scatter_direction) {
                     scatter_direction = rec.normal
@@ -27,7 +27,7 @@ impl Material {
 
             Material::Metal { albedo, fuzz } => {
                 let reflected = reflect(ray_in.direction, rec.normal);
-                let scatter_direction = reflected + fuzz * random_unit_vector(rng);
+                let scatter_direction = reflected + fuzz * random_unit_vector(sampler);
 
                 if scatter_direction.dot(rec.normal) > 0.0 {
                     Some((albedo, Ray::new(rec.p, scatter_direction)))
@@ -49,7 +49,7 @@ impl Material {
 
                 let cannot_refract = ri * sin_theta > 1.0;
 
-                let scatter_direction = if cannot_refract || reflectance(cos_theta, ri) > rng.f32() {
+                let scatter_direction = if cannot_refract || reflectance(cos_theta, ri) > sampler.next_1d() {
                     reflect(ray_in.direction, rec.normal)
                 } else {
                     refract(ray_in.direction, rec.normal, ri)

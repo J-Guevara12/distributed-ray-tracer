@@ -59,8 +59,8 @@ struct Point {
     hardware: String,
     benchmark: String,
     tracer: String,
-    /// Placeholder until F1.1 splits the integrator from the traversal. Once
-    /// there is more than one, this is what separates the curves.
+    /// Which estimator ran. This is what separates the curves once there is
+    /// more than one; `tracer` stays as the CLI selection that produced it.
     integrator: String,
     commit: String,
     commit_label: String,
@@ -111,6 +111,7 @@ pub fn run(benches: &[Benchmark], opts: &ConvergeOptions) -> anyhow::Result<()> 
 
     let commit = env::head_commit()?;
     let timestamp = chrono::Utc::now().to_rfc3339();
+    let integrator = Arc::new(opts.tracer.build(opts.max_depth));
     let mut points = Vec::new();
 
     println!(
@@ -170,7 +171,7 @@ pub fn run(benches: &[Benchmark], opts: &ConvergeOptions) -> anyhow::Result<()> 
                 let started = std::time::Instant::now();
                 let stats = render_scene(
                     Arc::new(camera),
-                    Arc::new(opts.tracer.build(opts.max_depth)),
+                    Arc::clone(&integrator),
                     framebuffer,
                     &|_: &TileResult| {},
                     opts.tile_size,
@@ -194,7 +195,7 @@ pub fn run(benches: &[Benchmark], opts: &ConvergeOptions) -> anyhow::Result<()> 
                     hardware: opts.hardware.id.clone(),
                     benchmark: bench.manifest.id.clone(),
                     tracer: opts.tracer.as_str().to_string(),
-                    integrator: "path".to_string(),
+                    integrator: integrator.name().to_string(),
                     commit: commit.sha[..12].to_string(),
                     commit_label: if dirty {
                         "workdir".to_string()

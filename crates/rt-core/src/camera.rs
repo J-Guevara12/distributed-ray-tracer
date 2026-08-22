@@ -1,5 +1,4 @@
-use crate::{Point3, Ray, Vec3};
-use fastrand::Rng;
+use crate::{Point3, Ray, Vec3, sampler::Sampler};
 use optional_struct::*;
 use serde::{Deserialize, Serialize};
 
@@ -78,7 +77,7 @@ impl Camera {
 
     /// Genera un rayo dirigido al píxel (x, y).
     /// Si `sample > 0`, aplica un desfase aleatorio sub-píxel (Antialiasing).
-    pub fn get_ray(&self, x: u32, y: u32, sample: u32, rng: &mut Rng) -> Ray {
+    pub fn get_ray<S: Sampler>(&self, x: u32, y: u32, sample: u32, sampler: &mut S) -> Ray {
         debug_assert!(
             x < self.width,
             "get_ray: x ({}) must be less than the camera width ({})",
@@ -95,7 +94,7 @@ impl Camera {
         let offset = if sample == 0 {
             Vec3::new(0.0, 0.0, 0.0)
         } else {
-            self.sample_square(rng)
+            self.sample_square(sampler)
         };
 
         let destination = self.pixel00_loc
@@ -105,7 +104,7 @@ impl Camera {
         let origin = if self.config.defocus_angle <= 0.0 {
             self.origin
         } else {
-            let lens_sample = self.sample_disk_in_unit_circle(rng);
+            let lens_sample = self.sample_disk_in_unit_circle(sampler);
             self.origin
                 + (lens_sample.x * self.defocus_disk_u)
                 + (lens_sample.y * self.defocus_disk_v)
@@ -114,19 +113,17 @@ impl Camera {
         Ray::new(origin, destination - origin)
     }
 
-    fn sample_square(&self, rng: &mut Rng) -> Vec3 {
-        let rand_x = rng.f32() - 0.5;
-        let rand_y = rng.f32() - 0.5;
-
-        Vec3::new(rand_x, rand_y, 0.0)
+    fn sample_square<S: Sampler>(&self, sampler: &mut S) -> Vec3 {
+        let u = sampler.next_2d();
+        Vec3::new(u.x - 0.5, u.y - 0.5, 0.0)
     }
 
-    fn sample_disk_in_unit_circle(&self, rng: &mut Rng) -> Vec3 {
+    fn sample_disk_in_unit_circle<S: Sampler>(&self, sampler: &mut S) -> Vec3 {
         loop {
             // Generamos un punto en un cuadrado de [-1, 1] en X y Y
             let p = Vec3::new(
-                rng.f32() * 2.0 - 1.0,
-                rng.f32() * 2.0 - 1.0,
+                sampler.next_1d() * 2.0 - 1.0,
+                sampler.next_1d() * 2.0 - 1.0,
                 0.0,
             );
             // Si el punto está dentro del círculo unitario (magnitud al cuadrado < 1), lo devolvemos

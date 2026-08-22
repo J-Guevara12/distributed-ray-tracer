@@ -1,10 +1,11 @@
-pub use glam::{Vec3A, Vec4};
+pub use glam::{Vec3A, Vec4, Vec2};
 
 pub mod background;
 pub mod camera;
 pub mod dto;
 pub mod job;
 pub mod display;
+pub mod sampler;
 
 pub use job::*;
 
@@ -30,6 +31,14 @@ impl Ray {
         self.origin + self.direction * t
     }
 }
+
+pub fn splitmix64(x: u64) -> u64 {
+    let mut z = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Interval {

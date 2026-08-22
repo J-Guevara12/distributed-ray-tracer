@@ -4,9 +4,9 @@ use rt_core::{display::DisplayParams, dto::ScenePayload};
 use rt_renderer::{
     camera::{Camera, CameraConfig},
     framebuffer::FrameBuffer,
+    integrators::PathTracer,
     render::render_scene,
     tiles::TileResult,
-    tracers::PathTracer,
 };
 use rt_scene::{Scene, bvh::Bvh, hittable_list::SceneData};
 

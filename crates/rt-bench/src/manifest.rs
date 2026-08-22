@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 use anyhow::{Context, bail};
 use rt_core::camera::CameraConfig;
 use rt_core::dto::ScenePayload;
-use rt_renderer::tracers::{AnyTracer, NormalTracer, PathTracer};
+use rt_renderer::integrators::{AnyIntegrator, NormalTracer, PathTracer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -42,10 +42,10 @@ pub enum Tracer {
 }
 
 impl Tracer {
-    pub fn build(self, max_depth: u32) -> AnyTracer {
+    pub fn build(self, max_depth: u32) -> AnyIntegrator {
         match self {
-            Tracer::Normal => AnyTracer::Normal(NormalTracer {}),
-            Tracer::Path => AnyTracer::Path(PathTracer::new(max_depth)),
+            Tracer::Normal => AnyIntegrator::Normal(NormalTracer {}),
+            Tracer::Path => AnyIntegrator::Path(PathTracer::new(max_depth)),
         }
     }
 

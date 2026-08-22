@@ -31,7 +31,7 @@ use rt_renderer::exr_io::{self, Comparison};
 use rt_renderer::framebuffer::FrameBuffer;
 use rt_renderer::render::render_scene;
 use rt_renderer::tiles::TileResult;
-use rt_renderer::tracers::PathTracer;
+use rt_renderer::integrators::PathTracer;
 use rt_scene::hittable_list::SceneData;
 use rt_scene::{Scene, bvh::Bvh};
 

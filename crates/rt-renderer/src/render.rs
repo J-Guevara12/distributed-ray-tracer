@@ -5,26 +5,19 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{Level, span};
 
-use rt_core::{Color, Vec4};
+use rt_core::{Color, Vec4, sampler::{IndependentSampler, Sampler}};
 
 use crate::{
     camera::Camera,
     framebuffer::FrameBuffer,
+    integrators::Integrator,
     stats::{RayStats, RenderStats},
     tiles::{TileGenerator, TileResult},
-    tracers::{RayContext, RayTracer},
 };
 
-fn splitmix64(x: u64) -> u64 {
-    let mut z = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
-pub fn render_scene<T: RayTracer>(
+pub fn render_scene<T: Integrator>(
     camera: Arc<Camera>,
-    tracer: Arc<T>,
+    integrator: Arc<T>,
     framebuffer: Arc<FrameBuffer>,
     on_tile: &(impl Fn(&TileResult) + Send + Sync),
     tile_size: u32,
@@ -47,10 +40,8 @@ pub fn render_scene<T: RayTracer>(
     let per_tile: Vec<(RayStats, f64)> = tiles
         .par_iter()
         .map(|tile| {
-            let mut ctx = RayContext {
-                rng: Rng::with_seed(0),
-                stats: RayStats::default(),
-            };
+            let mut sampler = IndependentSampler::new(Rng::with_seed(0), width);
+            let mut stats = RayStats::default();
             let mut pixels: Vec<Vec4> = Vec::with_capacity((tile.width * tile.height) as usize);
 
             let started = Instant::now();
@@ -63,11 +54,9 @@ pub fn render_scene<T: RayTracer>(
                     let mut color_accumulator = Color::new(0.0, 0.0, 0.0);
 
                     for sample in 0..camera.samples_per_pixel {
-                        let index = ((y as u64 * width as u64 + x as u64) << 32) | sample as u64;
-                        ctx.rng = Rng::with_seed(splitmix64(index));
-
-                        let ray = camera.get_ray(x, y, sample, &mut ctx.rng);
-                        let color = tracer.trace_ray(ray, scene, &mut ctx);
+                        sampler.start_sample((x, y), sample);
+                        let ray = camera.get_ray(x, y, sample, &mut sampler);
+                        let color = integrator.radiance(ray, scene, &mut sampler, &mut stats);
 
                         color_accumulator += color;
                     }
@@ -91,7 +80,7 @@ pub fn render_scene<T: RayTracer>(
             framebuffer.write_tile(&result);
             on_tile(&result);
 
-            (ctx.stats, elapsed_ms)
+            (stats, elapsed_ms)
         })
         .collect();
 

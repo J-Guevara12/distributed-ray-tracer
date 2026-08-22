@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use axum::{Json, extract::State, http::StatusCode};
-use rt_renderer::{render::render_scene, tiles::{TilePatch, TileResult}, tracers::PathTracer};
+use rt_renderer::{integrators::PathTracer, render::render_scene, tiles::{TilePatch, TileResult}};
 
 use crate::{handlers::ErrorResponse, state::AppState};
 

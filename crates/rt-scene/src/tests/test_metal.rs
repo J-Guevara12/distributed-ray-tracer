@@ -1,5 +1,6 @@
 use crate::{HitRecord, Material};
 use glam::Vec3A;
+use rt_core::sampler::IndependentSampler;
 use rt_core::{Point3, Ray};
 
 
@@ -18,7 +19,9 @@ fn test_perfect_metal_reflection_at_45_degrees() {
         material: 0,
     };
 
-    let (_, ray_scattered) = espejo_perfecto.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
+    let (_, ray_scattered) = espejo_perfecto
+        .scatter(&ray_in, &rec, &mut IndependentSampler::with_seed(0))
+        .unwrap();
 
     // Esperado: Debe salir rebotado perfectamente a 45° hacia arriba
     let direccion_esperada = Vec3A::new(1.0, 1.0, 0.0).normalize();
@@ -51,14 +54,14 @@ fn test_metal_fuzzy_absorption_edge_case() {
     };
 
     // Con fuzz alto, muchas muestras apuntan por debajo de la normal (Y < 0) y
-    // el rayo se absorbe. El RNG va FUERA del bucle: sembrándolo adentro las
+    // el rayo se absorbe. El sampler va FUERA del bucle: sembrándolo adentro las
     // 100 vueltas repetían la misma muestra, así que el test pasaba o fallaba
     // según qué devolviera la semilla 0 — y dejó de pasar al cambiar
     // `random_unit_vector` a la versión analítica.
-    let mut rng = fastrand::Rng::with_seed(0);
+    let mut sampler = IndependentSampler::with_seed(0);
     let mut absorbido = false;
     for _ in 0..100 {
-        if metal_rugoso.scatter(&ray_in, &rec, &mut rng).is_none() {
+        if metal_rugoso.scatter(&ray_in, &rec, &mut sampler).is_none() {
             absorbido = true;
             break;
         }

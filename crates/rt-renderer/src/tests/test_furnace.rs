@@ -25,9 +25,9 @@ use rt_scene::{Material, Scene, bvh::Bvh};
 
 use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
+use crate::integrators::PathTracer;
 use crate::render::render_scene;
 use crate::tiles::TileResult;
-use crate::tracers::PathTracer;
 
 /// Uniform environment radiance. Deliberately not 1.0 and not grey, so a
 /// channel swap or a stray normalisation shows up.

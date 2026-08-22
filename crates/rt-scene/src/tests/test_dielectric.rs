@@ -1,5 +1,6 @@
 use crate::{HitRecord, Material};
 use glam::Vec3A;
+use rt_core::sampler::IndependentSampler;
 use rt_core::{Point3, Ray};
 
 
@@ -18,7 +19,9 @@ fn test_dielectric_perpendicular_incidence_does_not_bend() {
         material: 0,
     };
 
-    let (attenuation, ray_scattered) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
+    let (attenuation, ray_scattered) = vidrio
+        .scatter(&ray_in, &rec, &mut IndependentSampler::with_seed(0))
+        .unwrap();
 
     // 1. El vidrio transparente no debe teñir la luz (atenuación blanca pura)
     assert_eq!(attenuation, Vec3A::ONE);
@@ -45,7 +48,9 @@ fn test_dielectric_total_internal_reflection_edge_case() {
         material: 0,
     };
 
-    let (_, ray_scattered) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
+    let (_, ray_scattered) = vidrio
+        .scatter(&ray_in, &rec, &mut IndependentSampler::with_seed(0))
+        .unwrap();
 
     // Caso límite físico: En este ángulo, la Ley de Snell daría un seno de refracción > 1.0 (Imposible).
     // El motor debe forzar Reflexión Interna Total. El rayo debe rebotar hacia abajo (Y negativa).
@@ -76,9 +81,13 @@ fn test_schlick_approximation_reflectance_limits() {
     // y casi ninguno REFRACTADO (Y < 0).
     let mut reflejados = 0;
     let iteraciones = 200;
-    
+
+    // El sampler va FUERA del bucle. Sembrándolo adentro, las 200 vueltas
+    // repetían la misma muestra y la tasa solo podía dar 0.0 o 1.0: un test
+    // de una muestra disfrazado de 200.
+    let mut sampler = IndependentSampler::with_seed(0);
     for _ in 0..iteraciones {
-        let (_, ray) = vidrio.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0)).unwrap();
+        let (_, ray) = vidrio.scatter(&ray_in, &rec, &mut sampler).unwrap();
         if ray.direction.y > 0.0 {
             reflejados += 1;
         }

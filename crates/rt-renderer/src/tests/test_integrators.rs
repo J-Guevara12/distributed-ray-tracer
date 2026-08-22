@@ -3,19 +3,17 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
+use rt_core::sampler::IndependentSampler;
 use rt_core::{Color, Interval, Point3, Ray, Vec3, background::Background};
 use rt_scene::{
     Aabb, HitRecord, Hittable, Material, Scene, geometry::Sphere, hittable_list::HittableList,
 };
 
+use crate::integrators::{Integrator, NormalTracer, PathTracer};
 use crate::stats::RayStats;
-use crate::tracers::{NormalTracer, PathTracer, RayContext, RayTracer};
 
-fn ctx() -> RayContext {
-    RayContext {
-        rng: fastrand::Rng::with_seed(0),
-        stats: RayStats::default(),
-    }
+fn sampler() -> IndependentSampler {
+    IndependentSampler::with_seed(0)
 }
 
 fn scene(world: Arc<dyn Hittable>, materials: Vec<Material>, background: Background) -> Scene {
@@ -65,7 +63,7 @@ fn test_tracer_fallback_to_gradient_on_miss() {
     let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
     let scene = scene(world, vec![], sky());
 
-    let color = tracer.trace_ray(ray, &scene, &mut ctx());
+    let color = tracer.radiance(ray, &scene, &mut sampler(), &mut RayStats::default());
 
     // En Y = 1.0 puro, el gradiente debe devolver el color superior
     assert_eq!(color[2], 1.0);
@@ -83,7 +81,7 @@ fn test_tracer_renders_normal_on_hit() {
         albedo: Color::ZERO,
     }];
     let scene = scene(Arc::new(world), materials, sky());
-    let color = tracer.trace_ray(ray, &scene, &mut ctx());
+    let color = tracer.radiance(ray, &scene, &mut sampler(), &mut RayStats::default());
 
     // En el centro exacto, la normal mapeada (N + 1) * 0.5 debe dar:
     // X=0 -> 0.5, Y=0 -> 0.5, Z=1 -> 1.0
@@ -103,8 +101,8 @@ fn test_path_tracer_max_depth_returns_black() {
     let tracer = PathTracer::new(5);
     let ray = Ray::new(Point3::new(0.0, 1.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
 
-    let mut context = ctx();
-    let color = tracer.trace_ray(ray, &scene, &mut context);
+    let mut stats = RayStats::default();
+    let color = tracer.radiance(ray, &scene, &mut sampler(), &mut stats);
 
     assert_eq!(
         color,
@@ -112,7 +110,7 @@ fn test_path_tracer_max_depth_returns_black() {
         "El rayo debió agotar los bounces y retornar negro"
     );
     assert_eq!(
-        context.stats.rays, 5,
+        stats.rays, 5,
         "un camino que siempre acierta traza un segmento por nivel de profundidad"
     );
 }
@@ -164,8 +162,8 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
     let tracer = PathTracer::new(10);
     let ray = Ray::new(Point3::new(0.0, 1.0, 0.0), Vec3::new(0.0, -1.0, 0.0));
 
-    let mut context = ctx();
-    let color_final = tracer.trace_ray(ray, &scene, &mut context);
+    let mut stats = RayStats::default();
+    let color_final = tracer.radiance(ray, &scene, &mut sampler(), &mut stats);
 
     assert_eq!(
         counter.hit_count.load(Ordering::Relaxed),
@@ -173,7 +171,7 @@ fn test_path_tracer_energy_conservation_exponential_decay() {
         "El rayo debió golpear exactamente 3 veces"
     );
     assert_eq!(
-        context.stats.rays, 4,
+        stats.rays, 4,
         "3 impactos más el segmento que escapa al fondo"
     );
 
@@ -199,14 +197,24 @@ fn test_path_tracer_miss_returns_sky_gradient() {
     let scene = scene(Arc::new(EmptyWorld), vec![], sky());
     let tracer = PathTracer::new(1);
 
-    let color_up = tracer.trace_ray(Ray::new(Point3::ZERO, Vec3::Y), &scene, &mut ctx());
+    let color_up = tracer.radiance(
+        Ray::new(Point3::ZERO, Vec3::Y),
+        &scene,
+        &mut sampler(),
+        &mut RayStats::default(),
+    );
     assert_eq!(
         color_up,
         Color::new(0.5, 0.7, 1.0),
         "El gradiente superior del cielo es incorrecto"
     );
 
-    let color_down = tracer.trace_ray(Ray::new(Point3::ZERO, -Vec3::Y), &scene, &mut ctx());
+    let color_down = tracer.radiance(
+        Ray::new(Point3::ZERO, -Vec3::Y),
+        &scene,
+        &mut sampler(),
+        &mut RayStats::default(),
+    );
     assert_eq!(
         color_down,
         Color::ONE,

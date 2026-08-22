@@ -1,4 +1,5 @@
 use crate::*;
+use rt_core::sampler::IndependentSampler;
 use rt_core::{Point3, Ray, Vec3};
 
 // Un material mock que implementa la interfaz para pruebas puntuales
@@ -20,7 +21,7 @@ fn test_lambertian_attenuation_and_direction() {
         material: 0,
     };
 
-    let result = mat.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0));
+    let result = mat.scatter(&ray_in, &rec, &mut IndependentSampler::with_seed(0));
     
     assert!(result.is_some(), "Lambertian siempre debería dispersar el rayo");
     let (attenuation, ray_scattered) = result.unwrap();

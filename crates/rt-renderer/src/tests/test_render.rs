@@ -1,21 +1,28 @@
 use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
+use crate::integrators::Integrator;
 use crate::render::render_scene;
+use crate::stats::RayStats;
 use crate::tiles::TileResult;
-use crate::tracers::RayContext;
-use crate::tracers::RayTracer;
 use rt_core::background::Background;
+use rt_core::sampler::Sampler;
 use rt_core::{Color, Point3, Ray, Vec3, Vec4};
 use rt_scene::{Scene, hittable_list::HittableList};
 use std::sync::{Arc, Mutex};
 
-struct MockRayTracer {
+struct MockIntegrator {
     fixed_color: Color,
 }
 
-impl RayTracer for MockRayTracer {
-    fn trace_ray(&self, _ray: Ray, _scene: &Scene, ctx: &mut RayContext) -> Color {
-        ctx.stats.rays += 1;
+impl Integrator for MockIntegrator {
+    fn radiance<S: Sampler>(
+        &self,
+        _ray: Ray,
+        _scene: &Scene,
+        _sampler: &mut S,
+        stats: &mut RayStats,
+    ) -> Color {
+        stats.rays += 1;
         self.fixed_color
     }
 }
@@ -40,7 +47,7 @@ fn test_render_scene_integration() {
     };
     let camera = Arc::new(Camera::new(camera_config));
 
-    let tracer = Arc::new(MockRayTracer {
+    let integrator = Arc::new(MockIntegrator {
         fixed_color: Color::new(0.0, 50.0, 0.0),
     });
 
@@ -56,7 +63,7 @@ fn test_render_scene_integration() {
 
     let stats = render_scene(
         camera,
-        tracer,
+        integrator,
         Arc::clone(&framebuffer),
         &on_tile,
         tile_size,

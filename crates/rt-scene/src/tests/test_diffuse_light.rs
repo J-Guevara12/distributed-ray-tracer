@@ -1,3 +1,4 @@
+use rt_core::sampler::IndependentSampler;
 use rt_core::{Color, Point3, Ray, Vec3};
 
 use crate::{HitRecord, Material};
@@ -24,7 +25,8 @@ fn test_scatter_returns_none() {
     let ray_in = Ray::new(Point3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0));
     let rec = setup_dummy_hit_record();
 
-    let scatter_result = light_material.scatter(&ray_in, &rec, &mut fastrand::Rng::with_seed(0));
+    let scatter_result =
+        light_material.scatter(&ray_in, &rec, &mut IndependentSampler::with_seed(0));
 
     assert!(
         scatter_result.is_none(),

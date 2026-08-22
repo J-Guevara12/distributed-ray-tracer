@@ -9,9 +9,9 @@ use rt_scene::{Material, Scene};
 
 use crate::camera::{Camera, CameraConfig};
 use crate::framebuffer::FrameBuffer;
+use crate::integrators::PathTracer;
 use crate::render::render_scene;
 use crate::tiles::TileResult;
-use crate::tracers::PathTracer;
 
 /// Escena mínima que ejercita los cuatro sitios que consumen aleatoriedad:
 /// jitter de píxel, disco de desenfoque, `random_unit_vector` (lambertiano y

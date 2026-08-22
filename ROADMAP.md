@@ -42,13 +42,16 @@ uno al 100% sin él.
 | F0.6 | `Material` y primitivas a enums, material por índice | ✅ |
 | F0.7 | BVH: eje de mayor extensión, sin duplicados, front-to-back | ✅ |
 | F0.8 | BVH plano + `Aabb{min,max}` + slab SIMD + `node_visits`/`prim_tests` | ✅ |
-| F0.9 | Ruleta rusa, `tile_size` 32, `max_depth` 64, fix de `emitted` | ✅ parcial |
+| F0.9 | Ruleta rusa, `tile_size` 32, `max_depth` 64, `random_unit_vector` analítico | ✅ |
+| F0.10 | `rt-bench preview` + `--tracer normal` como benchmark de recorrido | ✅ |
+| F0.11 | White furnace test automatizado (3 casos) | ✅ |
 | — | Barrida histórica: 19 commits × 2 escenas × 2 configs | ✅ |
 | — | Generaciones de hardware (`bench/hardware.toml`) + guarda de binario obsoleto | ✅ |
 | — | Suite B1 + B2 congelada, baselines en `bench/history.jsonl` | ✅ |
-| — | Tests estables (56, 1 ignorado) | ✅ |
+| — | Tests estables (59, 1 ignorado) | ✅ |
 
-Pendiente de F0.9: `random_unit_vector` analítico. De ahí, F0.10 en adelante.
+Pendiente de la Fase 0: **solo F0.12 (roofline)**. F0.13 se movió a F2.5b y F0.14 a F4.7b,
+porque ninguna bloquea la Fase 1.
 
 ---
 
@@ -178,12 +181,10 @@ Los números son **identidad**, no orden. El orden de ejecución está en §6.
 | F0.6 ✅ | `Material` y `Hittable` de `dyn` a enums. Justificación medible, no estética |
 | F0.7 ✅ | **BVH**: split por eje de mayor extensión (elimina `fastrand`), quitar el duplicado de `span==1`, orden de recorrido front-to-back |
 | F0.8 ✅ | `Aabb{min,max: Vec3A}`, `inv_dir` precomputado en `Ray`, slab test SIMD, `Ray` por referencia. **+ BVH plano** (`Vec<FlatNode>` con índices `u32`, hojas multi-primitiva, primitivas contiguas) |
-| F0.9 (parcial) | ✅ Ruleta rusa (`MIN_BOUNCES`, techo del clamp en 1.0); ✅ `tile_size` 32 y `max_depth` 64 como defaults; ✅ fix de `emitted(…)` → `(0.0, 0.0, rec.p)` hasta que F2.7 traiga UVs. **Pendiente**: `random_unit_vector` analítico. **Descartados**: corte por atenuación (la ruleta hace lo mismo sin sesgo; quedó como el piso `0.05` del clamp) y RNG por tile (F0.4 ya lo dejó por (píxel, sample); volver atrás rompería el determinismo) |
-| F0.10 | Preview rápido: baja resolución con `NormalTracer` a 1 spp |
-| F0.11 | White furnace test: esfera lambertiana albedo 1.0 en ambiente uniforme debe desaparecer. Automatizado |
-| F0.12 | Roofline: intensidad aritmética medida vs pico de máquina |
-| F0.13 | Primitiva caja (vía slab, reutiliza F0.8) + `Transform` con `Affine3A`. Semilla de F2.6 |
-| F0.14 | base64 en el DTO del stream + troceado del evento inicial en patches |
+| F0.9 ✅ | Ruleta rusa (`MIN_BOUNCES`, techo del clamp en 1.0); `tile_size` 32 y `max_depth` 64 como defaults; `random_unit_vector` analítico —por F1.5, que necesita un mapa biyectivo de `[0,1)²` a la esfera, no por velocidad—; fix de `emitted(…)` → `(0.0, 0.0, rec.p)` hasta que F2.7 traiga UVs. **Descartados**: corte por atenuación (la ruleta hace lo mismo sin sesgo; quedó como el piso `0.05` del clamp) y RNG por tile (F0.4 ya lo dejó por (píxel, sample); volver atrás rompería el determinismo) |
+| F0.10 ✅ | `rt-bench preview`: baja resolución con `NormalTracer`, metadata de procedencia en chunks tEXt del PNG. **+ `--tracer normal\|path` en `run`**, que da un benchmark de recorrido sin varianza de integrador — aunque solo de rayos primarios coherentes, que es el caso fácil |
+| F0.11 ✅ | White furnace test automatizado. Tres casos, porque albedo 1.0 solo no alcanza: **1 es punto fijo de la multiplicación**, así que aplicar el albedo cero, una o tres veces da lo mismo. Con albedo 0.5 la esfera tiene que valer exactamente la mitad del fondo, y todo píxel de borde tiene que caer dentro del rango |
+| F0.12 | Roofline: intensidad aritmética medida vs pico de máquina. **Última de la Fase 0** — ver la nota de abajo sobre por qué va antes de F1 |
 
 ### Fase 1 — Transporte de luz
 
@@ -210,6 +211,7 @@ El salto de calidad más grande de todo el plan.
 | F2.3 | *(promovido a F0.8)* BVH plano |
 | F2.4 | Construcción SAH binned, reemplazando el split por mediana |
 | F2.5 | **Construcción paralela**: LBVH con códigos Morton + radix sort paralelo, o SAH binned con Rayon |
+| F2.5b | Primitiva caja vía slab (reutiliza F0.8) + `Transform` con `Affine3A`. *(era F0.13; movida acá porque no bloquea nada de la Fase 1 y es el prerequisito directo de F2.6)*. Al llegar acá, revisar el test ignorado del rayo coplanar: la caja llena las escenas de superficies alineadas a ejes, así que el `0 * inf = NaN` pasa de improbable a plausible. **No aplicar a B1**: cambiar esa escena rompe la serie histórica |
 | F2.6 | Instancing + BVH de dos niveles (TLAS/BLAS) |
 | F2.7 | UV mapping en esferas, quads y triángulos; derivadas para filtrado |
 | F2.8 | Texturas procedurales: Perlin, Simplex, Worley/Voronoi, checker, gradientes, turbulencia, **domain warping**. Grafo componible |
@@ -254,6 +256,7 @@ ellas pero lento. Documentar la limitación y comparar ambas versiones después.
 | F4.5 | **Checkpointing**: serializar buffer de acumulación + estado del muestreador |
 | F4.6 | Persistencia: EXR canónico + PNG derivado, con metadata del render |
 | F4.7 | **API de Assets** direccionada por contenido (hash): texturas, mallas, HDRIs, VDBs |
+| F4.7b | base64 en el DTO del stream + troceado del evento inicial en patches. *(era F0.14; movida acá porque es plomería de streaming y su lugar natural es junto a F4.8)* |
 | F4.8 | **Streaming v2**: canal SSE por job, reconexión con `Last-Event-ID`, backpressure, keep-alive, binario sin base64 |
 | F4.9 | Prioridad y preemption: los previews interrumpen batch |
 | F4.10 | **Métricas** Prometheus: rayos/s, samples/s, histograma por tile, utilización, profundidad de cola |
@@ -304,16 +307,20 @@ Ejecutado, en este orden: **F0.7** (elimina el `fastrand` del BVH, que era el pi
 de ruido de todas las mediciones), **F0.4**, **F0.5**, **F0.6**, **F0.8** (la
 apuesta grande de §3.2: ×1.51 en B1 y ×1.57 en B2), **F0.3c** — adelantado
 respecto al plan, porque sin referencia y MSE la ruleta rusa de F0.9 no era
-medible — y **F0.9** menos el `random_unit_vector` analítico.
+medible — **F0.9**, **F0.10** y **F0.11**.
 
 Lo que sigue:
 
-1. **F0.9** — cerrar con el `random_unit_vector` analítico. No es por velocidad:
-   F1.5 necesita un mapa biyectivo de `[0,1)²` a la esfera, y un muestreo por
-   rechazo destruye una secuencia de baja discrepancia.
-2. **F0.10** — preview rápido.
-3. F0.11, F0.12, F0.13, F0.14.
-4. Fases 1 → 2 → 3 (hito de la mesa) → 4 → 5 → 6.
+1. **F0.12** — roofline. Es lo único que queda de la Fase 0, y va **antes** de F1
+   por una razón de oportunidad: los FLOPs por rayo se cuentan a mano hoy, y
+   después de que F1 meta NEE, MIS y GGX eso deja de ser viable. El código nunca
+   va a ser más simple de analizar.
+2. Fases 1 → 2 → 3 (hito de la mesa) → 4 → 5 → 6.
+
+F0.13 (caja + `Transform`) se movió a **F2.5b**, justo antes de instancing, que es
+lo que la necesita. F0.14 (base64 en el stream) se movió a **F4.7b**, junto al
+resto del streaming. Ninguna bloqueaba la Fase 1 y tenerlas en la Fase 0 solo
+retrasaba el salto de calidad.
 
 La métrica de acá en adelante es la eficiencia de §10, no el reloj.
 
@@ -393,7 +400,8 @@ Agregar un benchmark es `mkdir scenes/bench/<name>/` con `bench.toml`,
 | F0.6 | Δ rayos/s | B2 | barra de contribución por optimización |
 | F0.7–F0.8 | rayos/s + **nodos visitados/rayo** | B2 | idem + calidad de árbol |
 | F0.9 | **eficiencia `1/(MSE·s)`** contra referencia. El reloj solo no sirve: la ruleta rusa dejó B2 10% más rápido y 26% peor | B1, B2 | eficiencia por commit |
-| F0.11 | furnace | furnace | validación |
+| F0.10 | Mray/s y nodos/rayo con `--tracer normal`: recorrido sin varianza de integrador | B1, B2 | tabla de recorrido puro |
+| F0.11 | furnace: albedo 1.0 invisible, albedo 0.5 exactamente a la mitad | furnace | test |
 | F0.12 | intensidad aritmética vs pico | B2 | roofline |
 | **F1** | **MSE vs tiempo** (igual tiempo, no igual muestras) | **B1** | convergencia por muestreador × integrador |
 | F2 | tiempo de build vs #triángulos, memoria/triángulo | B3, B4 | escalabilidad del build paralelo |

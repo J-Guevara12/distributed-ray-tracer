@@ -85,7 +85,7 @@ fn rustc_version() -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-fn cpu_model() -> String {
+pub fn cpu_model() -> String {
     fs::read_to_string("/proc/cpuinfo")
         .ok()
         .and_then(|text| {

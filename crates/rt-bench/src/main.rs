@@ -3,6 +3,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 mod build;
+mod ceilings;
 mod cli;
 mod env;
 mod hardware;

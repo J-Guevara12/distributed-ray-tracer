@@ -4,6 +4,7 @@ use std::time::Duration;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::build;
+use crate::ceilings::{self, CeilingOptions};
 use crate::hardware;
 use crate::manifest::{self, Tracer, WorkloadKind, discover_benches, parse_bench_config, select};
 use crate::preview::{self, PreviewOptions};
@@ -30,6 +31,23 @@ pub enum Commands {
     Reference(ReferenceArgs),
     /// Renders low-resolution previews of the scenes and prints their paths
     Preview(PreviewArgs),
+    /// Measures this machine's peak FLOP/s and bandwidth hierarchy, for the roofline
+    Ceilings(CeilingsArgs),
+}
+
+#[derive(Args)]
+pub struct CeilingsArgs {
+    #[arg(long, default_value_t="./bench/ceilings".to_string())]
+    pub out_dir: String,
+    /// Thread counts to scan. Defaults to powers of two up to the machine's
+    /// parallelism, which is where the P/E asymmetry shows as a bend.
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub threads: Vec<usize>,
+    /// Overrides `current` in bench/hardware.toml.
+    #[arg(long)]
+    pub hardware: Option<String>,
+    #[arg(long, default_value_t=hardware::DEFAULT_PATH.to_string())]
+    pub hardware_file: String,
 }
 
 #[derive(Args)]
@@ -286,6 +304,21 @@ impl Cli {
                 };
 
                 preview::generate(&benches, &opts)?;
+            }
+
+            Commands::Ceilings(args) => {
+                build::ensure_fresh(Path::new("."))?;
+
+                let opts = CeilingOptions {
+                    out_dir: PathBuf::from(&args.out_dir),
+                    threads: args.threads.clone(),
+                    hardware: hardware::load(
+                        Path::new(&args.hardware_file),
+                        args.hardware.as_deref(),
+                    )?,
+                };
+
+                ceilings::measure(&opts)?;
             }
         }
 

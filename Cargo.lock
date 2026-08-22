@@ -2364,6 +2364,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "rayon",
  "rt-core",
  "rt-renderer",
  "rt-scene",

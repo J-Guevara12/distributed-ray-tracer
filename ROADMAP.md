@@ -45,13 +45,18 @@ uno al 100% sin él.
 | F0.9 | Ruleta rusa, `tile_size` 32, `max_depth` 64, `random_unit_vector` analítico | ✅ |
 | F0.10 | `rt-bench preview` + `--tracer normal` como benchmark de recorrido | ✅ |
 | F0.11 | White furnace test automatizado (3 casos) | ✅ |
+| F0.12 | `rt-bench ceilings` + roofline con modelo auditable | ✅ |
 | — | Barrida histórica: 19 commits × 2 escenas × 2 configs | ✅ |
 | — | Generaciones de hardware (`bench/hardware.toml`) + guarda de binario obsoleto | ✅ |
 | — | Suite B1 + B2 congelada, baselines en `bench/history.jsonl` | ✅ |
-| — | Tests estables (59, 1 ignorado) | ✅ |
+| — | Tests estables (62, 1 ignorado) | ✅ |
 
-Pendiente de la Fase 0: **solo F0.12 (roofline)**. F0.13 se movió a F2.5b y F0.14 a F4.7b,
-porque ninguna bloquea la Fase 1.
+**La Fase 0 está cerrada.** F0.13 se movió a F2.5b y F0.14 a F4.7b: ninguna
+bloqueaba la Fase 1, y tenerlas acá solo retrasaba el salto de calidad.
+
+Rendimiento acumulado sobre los 19 commits: **×2.94 en B1 y ×10.84 en B2**, con
+la contribución de cada cambio atribuida y su dispersión. Lo que sigue es F1, y
+ahí la métrica deja de ser el reloj — ver §3.6 y §10.
 
 ---
 
@@ -140,6 +145,41 @@ CPU en un render a 400×400.
 A 1920 px son 135 tiles, y ahí `quick` predice `full` con fidelidad (×4.58 vs
 ×4.53 en el total de B2).
 
+### 3.6 Lo que dejó el roofline, y a dónde apunta
+
+Cerrando F0.12 con los techos medidos de `gen1`:
+
+| | B1 | B2 |
+|---|---|---|
+| intensidad aritmética | 0.68 FLOP/byte | 0.50 |
+| working set | 1.3 KiB | 36.7 KiB |
+| techo que aplica | banda de caché, 445 GiB/s | 443 GiB/s |
+| % de ese techo | 28% | **40%** |
+| % del pico de cómputo | 7.5% | 7.8% |
+
+Las dos escenas caen a la **izquierda del quiebre** (1.13 FLOP/byte), o sea en la
+región limitada por memoria, y muy por encima de la diagonal de DRAM: el árbol
+vive en caché, como predecía §3.2.
+
+Tres consecuencias para el plan:
+
+**El margen que queda en recorrido no está en FLOPs.** Con 7.5% del pico de
+cómputo y 40% del techo de banda, más aritmética vectorizada no compra nada. Lo
+que queda es acortar la cadena de cargas dependientes, y eso es el **BVH ancho**
+(F2.4b) y el trazado por paquetes — no SAH ni más SIMD escalar.
+
+**El codo de escalado está en 8 hilos, y no es del código.** El barrido de
+`ceilings` da 100% de escalado ideal a 4 hilos, 79% a 8 y **41% a 24**: se acaban
+las 8 P-cores y entran las E-cores, que aportan la mitad por hilo. Cualquier
+medición de escalabilidad fuerte en esta máquina va a tener ese codo, y hay que
+caracterizarlo antes de F5.4 para no atribuírselo al scheduler.
+
+**El margen grande está en el integrador, no en el recorrido.** Eficiencia
+`1/(MSE·s)` medida: **B1 47.7 contra B2 930.6**, o sea que B1 necesita ~20× más
+muestras para el mismo error. Eso no lo toca ninguna optimización de BVH — es
+luz pequeña en caja cerrada, y es exactamente el blanco de **NEE (F1.3)** y
+**MIS (F1.4)**. Ese 47.7 es la línea base de la Fase 1.
+
 ---
 
 ## 4. Reglas de higiene de medición
@@ -184,7 +224,7 @@ Los números son **identidad**, no orden. El orden de ejecución está en §6.
 | F0.9 ✅ | Ruleta rusa (`MIN_BOUNCES`, techo del clamp en 1.0); `tile_size` 32 y `max_depth` 64 como defaults; `random_unit_vector` analítico —por F1.5, que necesita un mapa biyectivo de `[0,1)²` a la esfera, no por velocidad—; fix de `emitted(…)` → `(0.0, 0.0, rec.p)` hasta que F2.7 traiga UVs. **Descartados**: corte por atenuación (la ruleta hace lo mismo sin sesgo; quedó como el piso `0.05` del clamp) y RNG por tile (F0.4 ya lo dejó por (píxel, sample); volver atrás rompería el determinismo) |
 | F0.10 ✅ | `rt-bench preview`: baja resolución con `NormalTracer`, metadata de procedencia en chunks tEXt del PNG. **+ `--tracer normal\|path` en `run`**, que da un benchmark de recorrido sin varianza de integrador — aunque solo de rayos primarios coherentes, que es el caso fácil |
 | F0.11 ✅ | White furnace test automatizado. Tres casos, porque albedo 1.0 solo no alcanza: **1 es punto fijo de la multiplicación**, así que aplicar el albedo cero, una o tres veces da lo mismo. Con albedo 0.5 la esfera tiene que valer exactamente la mitad del fondo, y todo píxel de borde tiene que caer dentro del rango |
-| F0.12 | Roofline: intensidad aritmética medida vs pico de máquina. **Última de la Fase 0** — ver la nota de abajo sobre por qué va antes de F1 |
+| F0.12 ✅ | `rt-bench ceilings` mide los techos de la máquina (pico FLOP/s por ancho SIMD y ancho de banda por nivel de caché, barriendo hilos) y los guarda por generación de hardware; `scripts/plot_roofline.py` los cruza con los contadores de F0.8. FLOPs y bytes contados analíticamente, sin PMU, para que la VM y un servidor queden comparables — el modelo está publicado en `cli_guide.md`. Los bytes los assertan los tipos vía `test_layout.rs`, no las reglas de alineación. Resultado en §3.6 |
 
 ### Fase 1 — Transporte de luz
 
@@ -307,22 +347,22 @@ Ejecutado, en este orden: **F0.7** (elimina el `fastrand` del BVH, que era el pi
 de ruido de todas las mediciones), **F0.4**, **F0.5**, **F0.6**, **F0.8** (la
 apuesta grande de §3.2: ×1.51 en B1 y ×1.57 en B2), **F0.3c** — adelantado
 respecto al plan, porque sin referencia y MSE la ruleta rusa de F0.9 no era
-medible — **F0.9**, **F0.10** y **F0.11**.
+medible — **F0.9**, **F0.10**, **F0.11** y **F0.12**.
 
-Lo que sigue:
-
-1. **F0.12** — roofline. Es lo único que queda de la Fase 0, y va **antes** de F1
-   por una razón de oportunidad: los FLOPs por rayo se cuentan a mano hoy, y
-   después de que F1 meta NEE, MIS y GGX eso deja de ser viable. El código nunca
-   va a ser más simple de analizar.
-2. Fases 1 → 2 → 3 (hito de la mesa) → 4 → 5 → 6.
+F0.12 se hizo antes de F1 por oportunidad: los FLOPs por rayo se cuentan a mano
+hoy, y después de que F1 meta NEE, MIS y GGX eso deja de ser viable. El código
+nunca va a ser más simple de analizar.
 
 F0.13 (caja + `Transform`) se movió a **F2.5b**, justo antes de instancing, que es
 lo que la necesita. F0.14 (base64 en el stream) se movió a **F4.7b**, junto al
 resto del streaming. Ninguna bloqueaba la Fase 1 y tenerlas en la Fase 0 solo
 retrasaba el salto de calidad.
 
-La métrica de acá en adelante es la eficiencia de §10, no el reloj.
+**Lo que sigue: Fase 1 → 2 → 3 (hito de la mesa) → 4 → 5 → 6.**
+
+Y con la Fase 0 cerrada cambia la métrica: de acá en adelante es la eficiencia
+`1/(MSE·s)` de §10, no el reloj. La ruleta rusa dejó B2 10% más rápido y 26%
+peor, y el cronómetro solo veía la primera mitad.
 
 ---
 
@@ -402,7 +442,7 @@ Agregar un benchmark es `mkdir scenes/bench/<name>/` con `bench.toml`,
 | F0.9 | **eficiencia `1/(MSE·s)`** contra referencia. El reloj solo no sirve: la ruleta rusa dejó B2 10% más rápido y 26% peor | B1, B2 | eficiencia por commit |
 | F0.10 | Mray/s y nodos/rayo con `--tracer normal`: recorrido sin varianza de integrador | B1, B2 | tabla de recorrido puro |
 | F0.11 | furnace: albedo 1.0 invisible, albedo 0.5 exactamente a la mitad | furnace | test |
-| F0.12 | intensidad aritmética vs pico | B2 | roofline |
+| F0.12 | intensidad aritmética y % del techo que aplica; el % del pico de cómputo es secundario porque no sobrevive un error de conteo | B1, B2 | roofline con techos por generación |
 | **F1** | **MSE vs tiempo** (igual tiempo, no igual muestras) | **B1** | convergencia por muestreador × integrador |
 | F2 | tiempo de build vs #triángulos, memoria/triángulo | B3, B4 | escalabilidad del build paralelo |
 | F3 | costo relativo por feature | B5 | tabla de costo |

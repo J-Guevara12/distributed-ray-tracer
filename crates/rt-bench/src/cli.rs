@@ -5,6 +5,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use crate::build;
 use crate::ceilings::{self, CeilingOptions};
+use crate::converge::{self, ConvergeOptions, DEFAULT_SPP};
 use crate::hardware;
 use crate::manifest::{self, Tracer, WorkloadKind, discover_benches, parse_bench_config, select};
 use crate::preview::{self, PreviewOptions};
@@ -33,6 +34,50 @@ pub enum Commands {
     Preview(PreviewArgs),
     /// Measures this machine's peak FLOP/s and bandwidth hierarchy, for the roofline
     Ceilings(CeilingsArgs),
+    /// Sweeps spp to build an MSE-against-time convergence curve
+    Converge(ConvergeArgs),
+}
+
+#[derive(Args)]
+pub struct ConvergeArgs {
+    #[arg(default_value_t="./scenes/bench".to_string())]
+    #[arg(short, long)]
+    pub base_dir: String,
+    #[arg(default_value_t="bench.toml".to_string())]
+    #[arg(short, long)]
+    pub file_name: String,
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub only: Vec<String>,
+    /// Which workload's resolution to use. The spp comes from --spp, not from
+    /// the manifest: that is why this is a separate subcommand and a separate
+    /// output file.
+    #[arg(long, value_enum, default_value_t=WorkloadKind::Quick)]
+    pub config: WorkloadKind,
+    #[arg(long, value_enum, default_value_t=Tracer::Path)]
+    pub tracer: Tracer,
+    /// Sample counts to render. Powers of two by default: noise falls as
+    /// 1/sqrt(spp), so a geometric ladder spaces the points evenly on the
+    /// log-log plot the curve is read on.
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub spp: Vec<u32>,
+    #[arg(long, default_value_t=3)]
+    pub reps: usize,
+    #[arg(long, default_value_t=5)]
+    pub cooldown: u64,
+    #[arg(long, default_value_t=64)]
+    pub max_depth: u32,
+    #[arg(long, default_value_t=32)]
+    pub tile_size: u32,
+    #[arg(long, default_value_t="./bench/reference".to_string())]
+    pub reference: String,
+    #[arg(long, default_value_t="./bench/convergence.jsonl".to_string())]
+    pub out: String,
+    #[arg(long)]
+    pub hardware: Option<String>,
+    #[arg(long, default_value_t=hardware::DEFAULT_PATH.to_string())]
+    pub hardware_file: String,
+    #[arg(long)]
+    pub allow_dirty: bool,
 }
 
 #[derive(Args)]
@@ -319,6 +364,39 @@ impl Cli {
                 };
 
                 ceilings::measure(&opts)?;
+            }
+
+            Commands::Converge(args) => {
+                build::ensure_fresh(Path::new("."))?;
+
+                let base_dir = Path::new(&args.base_dir);
+                let config_files = discover_benches(base_dir, &args.file_name)?;
+                let benches = select(parse_bench_config(config_files)?, &args.only)?;
+
+                let spp = if args.spp.is_empty() {
+                    DEFAULT_SPP.to_vec()
+                } else {
+                    args.spp.clone()
+                };
+
+                let opts = ConvergeOptions {
+                    kind: args.config,
+                    tracer: args.tracer,
+                    spp,
+                    reps: args.reps,
+                    cooldown: Duration::from_secs(args.cooldown),
+                    max_depth: args.max_depth,
+                    tile_size: args.tile_size,
+                    reference_dir: PathBuf::from(&args.reference),
+                    out: PathBuf::from(&args.out),
+                    hardware: hardware::load(
+                        Path::new(&args.hardware_file),
+                        args.hardware.as_deref(),
+                    )?,
+                    allow_dirty: args.allow_dirty,
+                };
+
+                converge::run(&benches, &opts)?;
             }
         }
 

@@ -5,6 +5,7 @@ use clap::Parser;
 mod build;
 mod ceilings;
 mod cli;
+mod converge;
 mod env;
 mod hardware;
 mod manifest;

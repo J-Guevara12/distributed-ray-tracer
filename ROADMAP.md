@@ -50,13 +50,16 @@ uno al 100% sin él.
 | — | Generaciones de hardware (`bench/hardware.toml`) + guarda de binario obsoleto | ✅ |
 | — | Suite B1 + B2 congelada, baselines en `bench/history.jsonl` | ✅ |
 | — | Tests estables (62, 1 ignorado) | ✅ |
+| F1.0 | `rt-bench converge` + figura de convergencia MSE vs tiempo | ✅ |
 
 **La Fase 0 está cerrada.** F0.13 se movió a F2.5b y F0.14 a F4.7b: ninguna
 bloqueaba la Fase 1, y tenerlas acá solo retrasaba el salto de calidad.
 
 Rendimiento acumulado sobre los 19 commits: **×2.94 en B1 y ×10.84 en B2**, con
-la contribución de cada cambio atribuida y su dispersión. Lo que sigue es F1, y
-ahí la métrica deja de ser el reloj — ver §3.6 y §10.
+la contribución de cada cambio atribuida y su dispersión.
+
+F1 ya tiene su instrumento (F1.0) y arranca en F1.1. Desde acá la métrica deja de
+ser el reloj — ver §3.6 y §10.
 
 ---
 
@@ -230,17 +233,45 @@ Los números son **identidad**, no orden. El orden de ejecución está en §6.
 
 El salto de calidad más grande de todo el plan.
 
-| | Actividad |
-|---|---|
-| F1.1 | `Integrator` como trait/enum separado del recorrido |
-| F1.2 | Muestreo de BSDF: coseno-ponderado para difuso, **GGX VNDF** para microfacetas. Cada BSDF expone `sample()`, `eval()`, `pdf()` |
-| F1.3 | **NEE** — muestreo directo de luces, con rayo de sombra `any-hit` |
-| F1.4 | **MIS** — heurística de potencia de Veach |
-| F1.5 | Muestreadores: estratificado, Halton, **Sobol con scrambling de Owen**, blue noise |
-| F1.6 | Estructura de luces: uniforme → por potencia → BVH de luces |
-| F1.7 | **HDRI de entorno** con importance sampling (CDF 2D) |
-| F1.8 | PBR completo: GGX/Trowbridge-Reitz + Smith + compensación de energía multi-scatter; conductores con Fresnel complejo |
-| F1.9 | Clamping de fireflies, reportando el sesgo introducido |
+**El blanco está medido.** Eficiencia `1/(MSE·s)`: **B1 47.7 contra B2 930.6**, o
+sea que B1 necesita ~20× más muestras para el mismo error. No es geometría ni
+recorrido — es luz pequeña en caja cerrada, donde los caminos encuentran la
+fuente por azar. Cerrar ese factor es el trabajo de esta fase.
+
+Toda la Fase 0 bajó el costo por muestra. F1 baja **cuántas muestras hacen
+falta**, que es una mejora que el reloj no puede ver.
+
+| | Actividad | Estado |
+|---|---|---|
+| F1.0 | **El instrumento antes del cambio**: `rt-bench converge` barre spp y `scripts/plot_convergence.py` grafica MSE contra tiempo. Sin esto nada de F1 es medible, igual que F0.3c tuvo que adelantarse para poder medir la ruleta rusa | ✅ |
+| F1.1 | `Integrator` como trait/enum separado del recorrido | |
+| F1.2 | Muestreo de BSDF: coseno-ponderado para difuso, **GGX VNDF** para microfacetas. Cada BSDF expone `sample()`, `eval()`, `pdf()`. Acá el furnace test de F0.11 pasa de trivial a crítico: hoy el lambertiano tiene el coseno implícito en `normal + random_unit_vector` y no puede equivocarse; con la pdf explícita sí | |
+| F1.3 | **NEE** — muestreo directo de luces, con rayo de sombra `any-hit`. El BVH solo tiene `hit` (más cercano); hace falta una segunda función de recorrido que corte en el primer impacto, y vale medirla aparte | |
+| F1.4 | **MIS** — heurística de potencia de Veach. F1.3 y F1.4 son el 80% del valor de la fase | |
+| F1.5 | Muestreadores: estratificado, Halton, **Sobol con scrambling de Owen**, blue noise. Habilitado por el `random_unit_vector` analítico de F0.9: sin mapa biyectivo de `[0,1)²` a la esfera, un rechazo destruye la secuencia de baja discrepancia | |
+| F1.6 | Estructura de luces: uniforme → por potencia → BVH de luces. **Pide una escena nueva**: con una sola luz (B1) no cambia nada | |
+| F1.7 | **HDRI de entorno** con importance sampling (CDF 2D). Es lo que vuelve NEE útil en exteriores, o sea lo que arregla el caso de B2 | |
+| F1.8 | PBR completo: GGX/Trowbridge-Reitz + Smith + compensación de energía multi-scatter; conductores con Fresnel complejo. Puerta del hito de la mesa | |
+| F1.9 | Clamping de fireflies, **reportando el sesgo introducido**. La segunda mitad es el ítem: el clamping es sesgado y acá se cuantifica en vez de declararse aceptable, que es para lo que existe la infraestructura de referencia | |
+
+**Orden propuesto:** F1.0 (hecho) → F1.1 → F1.2 → F1.3 → F1.4 → F1.5 → F1.9 →
+F1.7 → F1.6 → F1.8. Misma lógica que en F0: primero el instrumento, después el
+cambio.
+
+**Dos cosas que hay que tener presentes al entrar:**
+
+*Las referencias se van a invalidar.* F1.2, F1.3, F1.4 y F1.8 mueven la imagen
+convergida, así que `run --reference` va a fallar con "la referencia es obsoleta"
+— y eso es el guard funcionando. Hay que regenerarlas después de F1.4 y otra vez
+después de F1.8, una hora de máquina cada vez.
+
+*B2 puede empeorar con NEE.* Su fondo es un cielo grande que NEE no muestrea, así
+que paga el rayo de sombra sin beneficio. Es la misma asimetría de la ruleta rusa
+(§3.6 y LEARNED_LESSONS), y hay que medirla en las dos escenas antes de concluir.
+
+**Riesgo de cronograma:** es la fase con más matemática y nueve ítems. Si algo se
+come el calendario es esta. El bloque F1.3 + F1.4 no se negocia; F1.5 a F1.8 se
+pueden recortar sin perder la narrativa.
 
 ### Fase 2 — Geometría y assets
 
@@ -443,7 +474,7 @@ Agregar un benchmark es `mkdir scenes/bench/<name>/` con `bench.toml`,
 | F0.10 | Mray/s y nodos/rayo con `--tracer normal`: recorrido sin varianza de integrador | B1, B2 | tabla de recorrido puro |
 | F0.11 | furnace: albedo 1.0 invisible, albedo 0.5 exactamente a la mitad | furnace | test |
 | F0.12 | intensidad aritmética y % del techo que aplica; el % del pico de cómputo es secundario porque no sobrevive un error de conteo | B1, B2 | roofline con techos por generación |
-| **F1** | **MSE vs tiempo** (igual tiempo, no igual muestras) | **B1** | convergencia por muestreador × integrador |
+| **F1** | **MSE vs tiempo** a igual tiempo, no a igual muestras (`rt-bench converge`). Se lee sobre diagonales de eficiencia constante; la pendiente −1 es el ideal insesgado y una cola plana delata un piso de sesgo | **B1**, B2 | convergencia por muestreador × integrador |
 | F2 | tiempo de build vs #triángulos, memoria/triángulo | B3, B4 | escalabilidad del build paralelo |
 | F3 | costo relativo por feature | B5 | tabla de costo |
 | F5 | escalabilidad fuerte y débil, desbalanceo, tiempo de recuperación | B3/B4 | curvas de eficiencia |
@@ -462,14 +493,35 @@ Agregar un benchmark es `mkdir scenes/bench/<name>/` con `bench.toml`,
 
 | | Qué hace |
 |---|---|
-| `rt-bench` | Mide el árbol actual, de HEAD en adelante. Ver `crates/rt-bench/cli_guide.md` |
+| `rt-bench run` | Mide el árbol actual, de HEAD en adelante. Ver `crates/rt-bench/cli_guide.md` |
+| `rt-bench reference` | Renderiza el ground truth a spp alto → EXR + sidecar con hashes |
+| `rt-bench preview` | Previews de baja resolución con procedencia en chunks tEXt del PNG |
+| `rt-bench ceilings` | Techos de la máquina por generación. También sirve de sonda de calibración: correrlo antes de una barrida dice si la máquina está en el estado que crees |
+| `rt-bench converge` | Barrido de spp para la curva MSE vs tiempo |
 | `scripts/bench_sweep.py` | Barrida histórica sobre commits pasados, desde fuera del código medido |
+| `scripts/tile_sweep.py` | Barrido de `tile_size` con verificación de invariantes |
 | `scripts/gen_cornell.py` | Genera B1 y verifica que la geometría no se solape |
-| `bench/history.jsonl` | Dataset compartido por ambos drivers. **Commitear siempre** |
+| `scripts/plot_evolution.py` | Tiempo por commit |
+| `scripts/plot_benchmarks.py` | B1 y B2 normalizados en los mismos ejes |
+| `scripts/plot_hardware.py` | Una serie por generación de hardware, para leer el corte |
+| `scripts/plot_roofline.py` | Intensidad aritmética contra los techos |
+| `scripts/plot_convergence.py` | MSE contra tiempo sobre diagonales de eficiencia |
+
+Todos los scripts de gráficas imprimen la ruta del PNG por stdout y las notas por
+stderr, así que `| xargs kitten icat` funciona en todos.
+
+| Dataset | |
+|---|---|
+| `bench/history.jsonl` | Compartido por `rt-bench run` y el sweep. **Commitear siempre** |
+| `bench/hardware.toml` | Generación activa. Actualizar **antes** de medir en máquina nueva |
+| `bench/ceilings/*.json` | Techos por generación |
+| `bench/convergence.jsonl` | Curvas de convergencia por hardware y commit |
+| `bench/reference/*.exr` | Ground truth, ignorado por tamaño; los sidecars `.json` sí se commitean |
 
 Instalar cuando se llegue a perfilado: `samply` (`cargo install samply`, sin root,
-flamegraph en el navegador) y `perf` vía `linux-tools`. Verificar temprano si el
-PMU está accesible dentro de la VM, porque el roofline de F0.12 depende de eso.
+flamegraph en el navegador) y `perf` vía `linux-tools`. El PMU **no** está
+accesible en la VM — de ahí que F0.12 cuente FLOPs y bytes analíticamente, que
+además es lo que mantiene comparables la VM y un servidor dedicado.
 
 ---
 

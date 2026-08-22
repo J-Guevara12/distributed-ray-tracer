@@ -59,12 +59,17 @@ pub struct TraversalStats {
     pub node_visits: u64,
     /// Primitivas contra las que se hizo el test de intersección real.
     pub prim_tests: u64,
+    /// De esos tests, los que devolvieron impacto. La diferencia importa para el
+    /// roofline: un test que falla sale temprano y cuesta la mitad, así que sin
+    /// este contador el conteo de FLOPs tendría que suponer la tasa de acierto.
+    pub prim_hits: u64,
 }
 
 impl TraversalStats {
     pub fn merge(&mut self, other: &Self) {
         self.node_visits += other.node_visits;
         self.prim_tests += other.prim_tests;
+        self.prim_hits += other.prim_hits;
     }
 }
 

@@ -61,6 +61,12 @@ fn longest_axis(primitives: &[Primitive]) -> usize {
 }
 
 impl Bvh {
+    /// Exported because the roofline model needs it: node bytes go into the
+    /// intensity denominator and into the working set that decides which
+    /// bandwidth ceiling binds. Better read from the type than assumed from
+    /// alignment rules in a script.
+    pub const NODE_BYTES: usize = std::mem::size_of::<FlatNode>();
+
     pub fn build(mut primitives: Vec<Primitive>) -> Self {
         if primitives.is_empty() {
             return Self {
@@ -158,6 +164,7 @@ impl Bvh {
         // descartar aliasing con `self` y los dejaría en memoria dentro del bucle.
         let mut node_visits = 0u64;
         let mut prim_tests = 0u64;
+        let mut prim_hits = 0u64;
 
         loop {
             let node = &self.nodes[current as usize];
@@ -176,6 +183,9 @@ impl Bvh {
 
                     for primitive in &self.primitives[start..start + node.count as usize] {
                         if let Some(rec) = primitive.hit(ray, Interval::new(ray_t.min, closest)) {
+                            if COUNT {
+                                prim_hits += 1;
+                            }
                             closest = rec.t;
                             best = Some(rec);
                         }
@@ -208,6 +218,7 @@ impl Bvh {
         if COUNT {
             stats.node_visits += node_visits;
             stats.prim_tests += prim_tests;
+            stats.prim_hits += prim_hits;
         }
 
         best

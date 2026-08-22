@@ -3,122 +3,122 @@
   "description": "i7-14700HX, 24 threads, Linux VM on a Windows host, host on high performance",
   "cpu": "Intel(R) Core(TM) i7-14700HX",
   "cpu_threads": 24,
-  "commit": "9f7a6e2a7abd",
+  "commit": "c4c04a5ff5fd",
   "dirty": true,
   "simd": "128-bit (glam Vec4) and 256-bit (AVX2 FMA)",
   "compute": [
     {
       "threads": 1,
-      "gflops_128": 53.94049037662373,
-      "gflops_256": 129.54900521449886
+      "gflops_128": 54.915738385839745,
+      "gflops_256": 133.68473571574953
     },
     {
       "threads": 2,
-      "gflops_128": 103.09838149496976,
-      "gflops_256": 243.26125343914248
+      "gflops_128": 107.88319729220807,
+      "gflops_256": 253.99094382590238
     },
     {
       "threads": 4,
-      "gflops_128": 198.85849926560354,
-      "gflops_256": 475.61633418805695
+      "gflops_128": 202.23785151903454,
+      "gflops_256": 479.690066988405
     },
     {
       "threads": 8,
-      "gflops_128": 342.5189081658688,
-      "gflops_256": 846.3011539324498
+      "gflops_128": 355.00443299273195,
+      "gflops_256": 847.3608785665725
     },
     {
       "threads": 16,
-      "gflops_128": 451.72529202024685,
-      "gflops_256": 924.9776532669731
+      "gflops_128": 454.5099225399578,
+      "gflops_256": 928.9158035254588
     },
     {
       "threads": 24,
-      "gflops_128": 526.151838707217,
-      "gflops_256": 1202.140282163315
+      "gflops_128": 550.4217323828036,
+      "gflops_256": 1218.050176125813
     }
   ],
   "bandwidth": [
     {
       "threads": 24,
       "bytes_per_thread": 4096,
-      "gib_per_sec": 460.1391147788493
+      "gib_per_sec": 444.6048904759533
     },
     {
       "threads": 24,
       "bytes_per_thread": 16384,
-      "gib_per_sec": 466.1522029673307
+      "gib_per_sec": 454.428582326885
     },
     {
       "threads": 24,
       "bytes_per_thread": 65536,
-      "gib_per_sec": 458.11850995198523
+      "gib_per_sec": 442.8962569792243
     },
     {
       "threads": 24,
       "bytes_per_thread": 262144,
-      "gib_per_sec": 436.15639154135744
+      "gib_per_sec": 446.9871145260073
     },
     {
       "threads": 24,
       "bytes_per_thread": 1048576,
-      "gib_per_sec": 455.121219181277
+      "gib_per_sec": 451.4445506874754
     },
     {
       "threads": 24,
       "bytes_per_thread": 4194304,
-      "gib_per_sec": 129.01858579387962
+      "gib_per_sec": 147.1357426542612
     },
     {
       "threads": 24,
       "bytes_per_thread": 16777216,
-      "gib_per_sec": 39.84456872806594
+      "gib_per_sec": 42.138322224144076
     },
     {
       "threads": 24,
       "bytes_per_thread": 67108864,
-      "gib_per_sec": 37.975770540647275
+      "gib_per_sec": 42.03851352110459
     },
     {
       "threads": 1,
       "bytes_per_thread": 4096,
-      "gib_per_sec": 37.41847027369587
+      "gib_per_sec": 39.041685139077316
     },
     {
       "threads": 1,
       "bytes_per_thread": 16384,
-      "gib_per_sec": 37.04784041840068
+      "gib_per_sec": 39.5564304857818
     },
     {
       "threads": 1,
       "bytes_per_thread": 65536,
-      "gib_per_sec": 38.582791313707006
+      "gib_per_sec": 39.38484107793238
     },
     {
       "threads": 1,
       "bytes_per_thread": 262144,
-      "gib_per_sec": 38.852303589541215
+      "gib_per_sec": 38.14686459925737
     },
     {
       "threads": 1,
       "bytes_per_thread": 1048576,
-      "gib_per_sec": 38.17142090604796
+      "gib_per_sec": 38.932817219144106
     },
     {
       "threads": 1,
       "bytes_per_thread": 4194304,
-      "gib_per_sec": 38.418585573551596
+      "gib_per_sec": 38.917809478163065
     },
     {
       "threads": 1,
       "bytes_per_thread": 16777216,
-      "gib_per_sec": 34.117681279717964
+      "gib_per_sec": 35.21814506452563
     },
     {
       "threads": 1,
       "bytes_per_thread": 67108864,
-      "gib_per_sec": 20.9146734030134
+      "gib_per_sec": 20.961717181432324
     }
   ],
-  "timestamp": "2026-08-22T00:00:04.178304574+00:00"
+  "timestamp": "2026-08-22T01:09:36.104115713+00:00"
 }

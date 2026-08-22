@@ -11,3 +11,4 @@ mod test_dielectric;
 mod test_diffuse_light;
 mod test_lambertian;
 mod test_metal;
+mod test_layout;

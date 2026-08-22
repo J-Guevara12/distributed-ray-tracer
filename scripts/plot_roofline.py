@@ -47,20 +47,36 @@ LEGACY_TRACER = "path"
 
 # --- the model -------------------------------------------------------------
 #
-# Hand-counted from the source. Every number here is a claim that can be
-# checked; F0.12 should also assert the two sizes with `size_of` rather than
-# deriving them from alignment rules.
+# Hand-counted from the source; the derivation is in crates/rt-bench/cli_guide.md
+# so the numbers in the report are auditable. The byte sizes are NOT counted here
+# — they are asserted against the types by test_layout.rs.
 
 FLOPS_PER_AABB = 25      # 6 sub + 6 mul + 3 min + 3 max + 4 horizontal + 2 clamp + 1 cmp
-FLOPS_PER_SPHERE = 35    # oc, a, h, c, discriminant, sqrt, root, normal, at(t)
-FLOPS_PER_QUAD = 50      # denom, t, at(t), planar vector, 2 cross + 2 dot, is_interior
-FLOPS_PER_SCATTER = 15   # lambertian: sqrt + sin + cos + add + normalise
 
-BYTES_PER_NODE = 48      # FlatNode: Aabb (2 x Vec3A = 32) + u32 + u16 + u8, align 16
-BYTES_PER_PRIMITIVE = 32 # Primitive enum
+# A test that misses exits early and costs about half of one that hits, so the
+# two are counted separately against the measured prim_tests / prim_hits. The
+# first version used the hit cost for everything and overestimated ~2x, because
+# with ~10 tests per ray almost all of them miss.
+FLOPS_SPHERE_MISS = 18   # oc 3, dot 5, length_squared 5, r^2 2, discriminant 2, cmp 1
+FLOPS_SPHERE_HIT = 41    # + sqrt, root, surrounds, at(t) 6, normal 6, HitRecord 7
+
+FLOPS_QUAD_MISS = 35     # 16 exiting at the interval check, 54 at is_interior; midpoint
+FLOPS_QUAD_HIT = 61      # + at(t) 6, planar vector 3, 2 cross 18, 2 dot 10, HitRecord 7
+
+FLOPS_PER_SCATTER = 31   # analytic random_unit_vector 10, add 3, near_zero 6, Ray::new 12
+
+# Both asserted by crates/rt-scene/src/tests/test_layout.rs, not derived from
+# alignment rules here. The primitive was assumed to be 32 and measured 48: a
+# Vec3A centre stretches Sphere's 24 bytes of data to 32, and the enum tag
+# rounds to 48.
+BYTES_PER_NODE = 48
+BYTES_PER_PRIMITIVE = 48
 
 # B1 is a Cornell box: 18 quads and one glass sphere. B2 is all spheres.
-PRIMITIVE_FLOPS = {"B1": FLOPS_PER_QUAD, "B2": FLOPS_PER_SPHERE}
+PRIMITIVE_FLOPS = {
+    "B1": (FLOPS_QUAD_MISS, FLOPS_QUAD_HIT),
+    "B2": (FLOPS_SPHERE_MISS, FLOPS_SPHERE_HIT),
+}
 
 GIB = 1024 ** 3
 
@@ -89,6 +105,8 @@ def load_records(hardware, tracer):
         if (r.get("tracer") or LEGACY_TRACER) != tracer:
             continue
         if not all(r.get(k) for k in ("rays", "node_visits", "wall_ms")):
+            continue
+        if r.get("prim_hits") is None:
             continue
         groups[(r["benchmark"], r["config"])].append(r)
     return groups
@@ -123,20 +141,33 @@ def working_set(primitives):
 def analyse(benchmark, records, tracer, primitives):
     """Median over reps, then the analytic counts. Returns one roofline point."""
     rays = st.median([r["rays"] for r in records])
+    samples = st.median([r["samples"] or 0 for r in records])
     nodes = st.median([r["node_visits"] for r in records])
     prims = st.median([r["prim_tests"] or 0 for r in records])
+    hits = st.median([r["prim_hits"] or 0 for r in records])
     seconds = st.median([r["wall_ms"] for r in records]) / 1000.0
 
-    primitive_flops = PRIMITIVE_FLOPS.get(benchmark, FLOPS_PER_SPHERE)
-    scatter = FLOPS_PER_SCATTER if tracer == "path" else 0
+    miss_flops, hit_flops = PRIMITIVE_FLOPS.get(
+        benchmark, (FLOPS_SPHERE_MISS, FLOPS_SPHERE_HIT)
+    )
 
-    flops = nodes * FLOPS_PER_AABB + prims * primitive_flops + rays * scatter
+    # A path of length L has L segments and L-1 scatters: the last one escapes
+    # or is absorbed. So scatters = rays - samples, both of them recorded.
+    scatters = max(0.0, rays - samples) if tracer == "path" else 0.0
+
+    flops = (
+        nodes * FLOPS_PER_AABB
+        + (prims - hits) * miss_flops
+        + hits * hit_flops
+        + scatters * FLOPS_PER_SCATTER
+    )
     byte_count = nodes * BYTES_PER_NODE + prims * BYTES_PER_PRIMITIVE
 
     return {
         "rays": rays,
         "nodes_per_ray": nodes / rays,
         "prims_per_ray": prims / rays,
+        "hit_rate": hits / prims if prims else 0.0,
         "seconds": seconds,
         "flops": flops,
         "bytes": byte_count,
@@ -199,13 +230,14 @@ def report(points, compute, bandwidth, curve, ceilings, hardware, tracer):
     print("  FLOP counts are hand-derived; the model is in this script's header",
           file=sys.stderr)
 
-    print(f"\n  {'bench':<12}{'nod/ray':>9}{'prim/ray':>10}{'GFLOP':>10}"
-          f"{'GB':>9}{'FLOP/B':>9}{'GFLOP/s':>10}", file=sys.stderr)
-    print(f"  {'-' * 69}", file=sys.stderr)
+    print(f"\n  {'bench':<12}{'nod/ray':>9}{'prim/ray':>10}{'hit rate':>10}"
+          f"{'GFLOP':>10}{'GB':>9}{'FLOP/B':>9}{'GFLOP/s':>10}", file=sys.stderr)
+    print(f"  {'-' * 79}", file=sys.stderr)
     for label, p in points.items():
         print(f"  {label:<12}{p['nodes_per_ray']:>9.2f}{p['prims_per_ray']:>10.2f}"
-              f"{p['flops'] / 1e9:>10.1f}{p['bytes'] / 1e9:>9.1f}"
-              f"{p['intensity']:>9.2f}{p['gflops']:>10.1f}", file=sys.stderr)
+              f"{100 * p['hit_rate']:>9.1f}%{p['flops'] / 1e9:>10.1f}"
+              f"{p['bytes'] / 1e9:>9.1f}{p['intensity']:>9.2f}"
+              f"{p['gflops']:>10.1f}", file=sys.stderr)
 
     print(f"\n  {'bench':<12}{'working set':>13}{'level':>10}{'BW there':>12}"
           f"{'% of that':>12}{'% of peak':>12}", file=sys.stderr)
@@ -309,9 +341,13 @@ def main():
     if args.config:
         groups = {k: v for k, v in groups.items() if k[1] == args.config}
     if not groups:
-        raise SystemExit(f"error: no records for {hardware} with tracer {args.tracer}.\n"
-                         f"       The roofline needs node_visits, which only rt-bench "
-                         f"records:\n         rt-bench run --config full")
+        raise SystemExit(
+            f"error: no usable records for {hardware} with tracer {args.tracer}.\n"
+            f"       The roofline needs node_visits, prim_tests and prim_hits, which\n"
+            f"       only rt-bench records — the sweep measures `standalone`, which is\n"
+            f"       not instrumented. Record a run with:\n"
+            f"         ./target/release/rt-bench run --config quick --reps 3\n"
+            f"         ./target/release/rt-bench run --config full  --reps 3")
 
     primitives = scene_sizes()
     points = {

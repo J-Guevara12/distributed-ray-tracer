@@ -31,6 +31,9 @@ pub struct Record {
     pub samples_per_sec: Option<f64>,
     pub node_visits: Option<u64>,
     pub prim_tests: Option<u64>,
+    /// De `prim_tests`, los que acertaron. Un test que falla sale temprano y
+    /// cuesta la mitad; el roofline necesita separarlos.
+    pub prim_hits: Option<u64>,
     pub image_hash: Option<String>,
     /// Error contra la imagen de referencia, en espacio lineal. `None` si la
     /// corrida no usó `--reference`.

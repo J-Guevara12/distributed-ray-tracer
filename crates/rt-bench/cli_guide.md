@@ -234,6 +234,73 @@ rt-bench run --out /tmp/experiment.jsonl
 
 ---
 
+## The roofline model
+
+`scripts/plot_roofline.py` turns recorded counters into an arithmetic intensity
+and an achieved GFLOP/s. No hardware counters are involved: the VM does not
+expose the PMU, and mixing PMU numbers on a server with hand counts on the VM
+would make the two machines incomparable. So both sides are counted, and the
+counts are published here to be audited.
+
+**Bytes are not counted here.** `Bvh::NODE_BYTES` and `size_of::<Primitive>()`
+are asserted against the types by `crates/rt-scene/src/tests/test_layout.rs`, so
+adding a field to `FlatNode` fails a test instead of silently moving the
+roofline. Current values: **48 bytes per node, 48 per primitive**. The primitive
+was assumed to be 32 and measured 48 — a `Vec3A` centre stretches `Sphere`'s 24
+bytes of payload to 32, and the enum tag rounds that to 48.
+
+### FLOPs per operation
+
+Counted over the three useful lanes of a `Vec3A`, not the four physical ones.
+Min, max and float comparisons count as operations; `sqrt`, `sin` and `cos`
+count as one each, which is the usual convention and the weakest part of the
+model.
+
+| Operation | FLOPs | Derivation |
+|---|---|---|
+| AABB slab test | **25** | 6 sub + 6 mul (two `(plane - origin) * inv_dir`), 3 min + 3 max, 2+2 horizontal reduce, 2 clamp against `ray_t`, 1 compare |
+| Sphere, misses | **18** | `oc` 3, `dot` 5, `length_squared` 5, `r²` 2, discriminant 2, compare 1 — then it returns |
+| Sphere, hits | **41** | the 18 above, plus `sqrt` 1, root 1, `surrounds` 2, `at(t)` 6, outward normal 6, `HitRecord::new` 7 |
+| Quad, misses | **35** | 16 if it exits at the interval check, 54 if it reaches `is_interior`; the midpoint is used and this is the largest single uncertainty |
+| Quad, hits | **61** | plus `at(t)` 6, planar vector 3, two crosses 18, two dots 10, `HitRecord::new` 7 |
+| Scatter | **31** | analytic `random_unit_vector` 10, add 3, `is_near_zero` 6, `Ray::new` (normalise + `inv_dir`) 12 |
+
+### How the totals are formed
+
+```
+FLOPs = node_visits              x 25
+      + (prim_tests - prim_hits) x miss cost
+      + prim_hits                x hit cost
+      + (rays - samples)         x 31
+
+bytes = node_visits x 48 + prim_tests x 48
+```
+
+`prim_hits` exists because of this table. A test that misses exits early and
+costs about half of one that hits, and with ~10 tests per ray almost all of them
+miss — the first version of the model charged the hit cost to everything and
+overestimated the FLOPs roughly twofold.
+
+`rays - samples` is the scatter count: a path of length L has L segments and
+L-1 scatters, since the last one escapes or is absorbed.
+
+### Why the conclusion survives a bad count
+
+If the FLOP count is wrong by a factor k, intensity and achieved GFLOP/s both
+scale by k, so the point moves **parallel to the bandwidth diagonal**. Its
+distance to the bandwidth ceiling does not change; only its distance to the
+compute ceiling does.
+
+So "bandwidth-bound or compute-bound" is robust to counting error, and "% of
+compute peak" is not. Quote the first, treat the second as an estimate.
+
+One caveat the plot cannot show: the bandwidth ceilings come from a sequential
+read, where the prefetcher always wins. BVH traversal chases pointers, so the
+achievable bandwidth for that access pattern is below the measured ceiling and
+the real gap is smaller than it looks.
+
+---
+
 ## Output schema
 
 One JSON object per repetition, appended to `--out`. Field names and order
@@ -248,7 +315,7 @@ schema admits **new** fields only, never renamed or repurposed ones.
 | `profile` | `"optimized"` |
 | `rep`, `wall_ms` | render time only |
 | `build_ms` | scene + BVH construction. `rt-bench` only — the sweep cannot measure it |
-| `rays`, `rays_per_sec`, `node_visits`, `prim_tests`, `image_hash`, `mse` | explicit `null` until F0.3b / F0.8 / F0.3c land |
+| `rays`, `rays_per_sec`, `node_visits`, `prim_tests`, `prim_hits` | `null` in sweep records: `standalone` is not instrumented. `prim_hits` splits the primitive cost into miss and hit for the roofline — see *The roofline model* |
 | `hardware` | generation id, e.g. `"gen1"`. **Filter on this before comparing any wall time.** Absent in records before 2026-08-20, which are all `gen0` |
 | `mse`, `relative_mse`, `efficiency` | error against the reference image and `1/(mse·s)`. `null` unless `--reference` was passed |
 | `reference_spp`, `reference_max_depth` | how the reference was rendered, to audit the noise floor without opening the sidecar |

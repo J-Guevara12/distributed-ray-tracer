@@ -43,6 +43,7 @@ struct Timing {
     samples: u64,
     node_visits: u64,
     prim_tests: u64,
+    prim_hits: u64,
     tile_ms: Vec<f64>,
     image_hash: String,
 }
@@ -172,6 +173,7 @@ fn measure(bench: &Benchmark, opts: &RunOptions, reference: Option<&Reference>) 
         samples: width as u64 * height as u64 * workload.spp as u64,
         node_visits: stats.traversal.node_visits,
         prim_tests: stats.traversal.prim_tests,
+        prim_hits: stats.traversal.prim_hits,
         tile_ms: stats.tile_ms,
         image_hash: env::image_sha(&snapshot),
     }
@@ -290,6 +292,7 @@ pub fn run(benches: &[Benchmark], opts: &RunOptions) -> anyhow::Result<()> {
                 samples_per_sec: Some(timing.samples_per_sec()),
                 node_visits: Some(timing.node_visits),
                 prim_tests: Some(timing.prim_tests),
+                prim_hits: Some(timing.prim_hits),
                 image_hash: Some(timing.image_hash.clone()),
                 mse: timing.comparison.map(|c| c.mse),
                 relative_mse: timing.comparison.map(|c| c.relative_mse),

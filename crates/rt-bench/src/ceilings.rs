@@ -18,11 +18,11 @@
 //! `cpu_mhz` field failed to do when the host had power saving enabled.
 
 use std::hint::black_box;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::env;
 use crate::hardware::Hardware;
@@ -48,21 +48,21 @@ pub struct CeilingOptions {
     pub hardware: Hardware,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Clone)]
 pub struct ComputePoint {
     pub threads: usize,
     pub gflops_128: f64,
     pub gflops_256: Option<f64>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Clone)]
 pub struct BandwidthPoint {
     pub threads: usize,
     pub bytes_per_thread: usize,
     pub gib_per_sec: f64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Clone)]
 pub struct Ceilings {
     pub hardware: String,
     pub description: String,
@@ -326,21 +326,4 @@ pub fn measure(opts: &CeilingOptions) -> anyhow::Result<()> {
 
     println!("\n{}", path.display());
     Ok(())
-}
-
-/// Loads the ceilings for a generation. Refuses rather than guess: a roofline
-/// plotted against another machine's ceilings looks valid and is not.
-pub fn load(dir: &Path, hardware: &str) -> anyhow::Result<Ceilings> {
-    let path = dir.join(format!("{hardware}.json"));
-    if !path.exists() {
-        bail!(
-            "no ceilings for {hardware} in {}. Measure them with:\n  \
-             rt-bench ceilings",
-            dir.display()
-        );
-    }
-
-    let content =
-        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-    serde_json::from_str(&content).with_context(|| format!("parsing {}", path.display()))
 }
